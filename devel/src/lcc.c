@@ -19,11 +19,16 @@
 
 
 #define RUNS 10
-#define WARMUP 1
-
+#define WARMUP 0
 #include "mpi_wrapper.h"
+#ifdef LSB
 #include "liblsb.h"
+#endif
+
+#ifdef CLAMPI
 #include "clampi.h"
+#endif 
+
 
 #define VTAG(t) (  0*ntask+(t))
 #define HTAG(t) (100*ntask+(t))
@@ -1031,32 +1036,26 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output){
 		CMPI_Win win_col;
 		CMPI_Win win_row;
 		float lcc = 0;
-//		int rs = 0;
-//		MPI_Comm_size( Row_comm, &rs ); 
-//		printf("GESOOOOOOOOOOOOOOOOOOOOOOOO %d\n", rs);
 		CMPI_Win_create(col, col_bl*sizeof(LOCINT), sizeof(LOCINT), MPI_INFO_NULL, Row_comm, &win_col);
 		CMPI_Win_create(row, col[col_bl]*sizeof(LOCINT), sizeof(LOCINT), MPI_INFO_NULL, Row_comm, &win_row);
 		
-/*		for (i = 0; i < col_bl; i++){
-			col[i] = i;
-		}	*/
 		MMPI_WIN_LOCK_ALL(0, win_col.win);
 		MMPI_WIN_LOCK_ALL(0, win_row.win);
 		LOCINT *adj_v = (LOCINT*)Malloc(row_pp*sizeof(LOCINT));
-//		LOCINT *adj_v = (LOCINT*)malloc(row_pp*sizeof(LOCINT));
 		LOCINT *adj_local = (LOCINT*)Malloc(row_pp*sizeof(LOCINT));
 	
-//		printf("locint %d and LOCINTMPI %d\n", sizeof(LOCINT),sizeof(LOCINT_MPI));	
 
 		LOCINT nget = 0;
 		LOCINT nlocal = 0;
 		LOCINT zerouno = 0;	
+#ifdef LSB
 		LSB_Set_Rparam_int("rank", gmyid);
 
 		LSB_Set_Rparam_int("csize", gntask); 
+#endif
 #ifdef CLAMPI
 		LSB_Set_Rparam_string("type", "CLAMPI");
-#else
+#elif LSB
 		LSB_Set_Rparam_string("type", "MPI");
 #endif 
 		int gres;
@@ -1065,18 +1064,15 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output){
 
 		for (it=0; it<RUNS+WARMUP; it++){
 		fprintf(stdout, "it: %i\n", it);
+#ifdef LSB
 		LSB_Res();
-
+#endif
 		for (i = 0; i < col_bl; i++){
 
 			row_offset = col[i+1] - col[i];
-//			fprintf(stdout,"proc-%d (%d,%d)  Node %ld (degree %d) -> ",myid, myrow, mycol, LOCJ2GJ(i), row_offset );
 			memcpy(adj_local, &row[col[i]], row_offset*sizeof(LOCINT));	
-			//fprintf(stdout,"%u ",/*LOCI2GI*/( row[col[i]+jj]));	
-			//printf("Calcolo lcc di %u: ",LOCJ2GJ(i));				
 			counter = 0;
 			for (jj = 0; jj < row_offset; jj++){
-				//break;		
 				gvid =LOCI2GI(row[col[i]+jj]); // offset gvid in proc dest_get is gvid % C
 				dest_get = VERT2PROC(gvid);
 				off_start = gvid % col_bl ;
@@ -1089,7 +1085,6 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output){
 					MMPI_GET(r_off,2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col.win);
 					MMPI_WIN_FLUSH(dest_get, win_col.win);
 #endif
-//					fprintf(stdout,"*%u with OFFSET start in COL[%u] = %u - OFFSET REMOTO IN ROW [%u %u] prc-remote %d\n",gvid,off_start, col[off_start],r_off[0], r_off[1], dest_get);
 
 
 #ifdef CLAMPI
@@ -1101,31 +1096,22 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output){
 #endif
 
 					nget++;
-					//printf("\(");
-					//for (vv = 0; vv < r_off[1]-r_off[0]; vv++){
-					//	fprintf(stdout,"%u ", adj_v[vv]);
-					//}
-//					printf(")\n");
 				}else{
 					r_off[0] = col[off_start];
 					r_off[1] = col[off_start+1];
-//					fprintf(stdout,"*%u with OFFSET start in COL[%u] = %u - OFFSET LOCAL IN ROW [%u %u] prc-local %d\n",gvid,off_start, col[off_start],r_off[0], r_off[1], dest_get);
 					memcpy(adj_v, &row[r_off[0]], (r_off[1]-r_off[0])*sizeof(LOCINT));
 					nlocal++;
 
 				}
-				//printf("check current child in adj(%u)\n",LOCJ2GJ(i));				
-				//printf("\n\t\t %d-child %u \n",jj, gvid);
-				/*for (vv = 0; vv < r_off[1]-r_off[0]; vv++){
+				// Compute LCC				
+				for (vv = 0; vv < r_off[1]-r_off[0]; vv++){
 					if (adj_v[vv] == LOCI2GI(i)) continue;
 					for  (vvv = 0; vvv < row_offset; vvv++){
-						//printf("(%u ?=  %u) ",adj_v[vv],  adj_local[vvv]);
 						if (adj_v[vv] == adj_local[vvv]){
 							counter +=1;
 						}
 					}
-					//printf("\n");
-				}*/
+				}
 			}
 			if (row_offset == 1 || row_offset == 0){ 
 				lcc = 0;
@@ -1137,21 +1123,17 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output){
 			
 			output[i] = lcc;
 			
-//			printf("\n");
-//			for (vv = 0; vv < row_offset; vv++){
-//					printf("conferma conferma %u\n", adj_local[vv]);
-//			}
-
 		}
+#ifdef LSB
 		if (it>WARMUP) LSB_Rec(it);
-
+#endif
 #ifdef CLAMPI
 		cl_flush(win_col);
 		cl_flush(win_row);
 #endif
                 }
 
-		fprintf(stdout,"%d %u %u %u\n", myid, col_bl, nget, nlocal);
+		//fprintf(stdout,"%d %u %u %u\n", myid, col_bl, nget, nlocal);
 		MMPI_WIN_UNLOCK_ALL(win_col.win);
 		MMPI_WIN_UNLOCK_ALL(win_row.win);
 
@@ -1164,14 +1146,6 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output){
 		freeMem(adj_v);
 		freeMem(adj_local);
 	}
-	/*
-	int pp = 0;
-	for (i = 0; i < col_bl; i++){
-		pp = col[i+1]- col[i];
-		fprintf(stdout,"proc-%d Node %u size %d lcc: %f\n",myid, LOCJ2GJ(i), pp,output[i]);
-
-	}
-	*/
 
 }
 
@@ -1261,12 +1235,11 @@ int main(int argc, char *argv[]) {
 
 	MMPI_INIT(&argc, &argv);
 	MPI_Barrier(MPI_COMM_WORLD);
-	
+#ifdef LSB	
 	LSB_Init("llc", 0);
+#endif
 	cl_init();
 
-//      struct timespec mytime;
-//      clock_gettime( CLOCK_REALTIME, &mytime);
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &gmyid);
 	MPI_Comm_size(MPI_COMM_WORLD, &gntask);
@@ -1570,29 +1543,7 @@ int main(int argc, char *argv[]) {
 
 	if (analyze_degree == 1)
 		analyze_deg(degree, col_bl);
-	// Allocate BitMask to store visited unique vertices ???
-/*
-	if (!mono){
-		vRbuf = (LOCINT *)Malloc(2*col_bl*sizeof(*vRbuf));  // We need to double the size for sigma
-		vRnum = (int *)Malloc(R*sizeof(*vRnum));
-		hSbuf = (LOCINT *)Malloc(2*row_pp*sizeof(*hSbuf));  // We need to double the size for sigma
-		hSnum = (int *)Malloc(C*sizeof(*hSnum));
-		hRbuf = (LOCINT *)Malloc(2*row_pp*sizeof(*hRbuf));  // We need to double the size for sigma
-		hRnum = (int *)Malloc(C*sizeof(*hRnum));
-		hSFbuf = (float*)Malloc(MAX(col_bl, row_pp)*sizeof(*hSFbuf));
-		hRFbuf = (float*)Malloc(MAX(col_bl, row_pp)*sizeof(*hRFbuf));
 
-		status  =  (MPI_Status *) Malloc(MAX(C,R)*sizeof(*status));
-		vrequest = (MPI_Request *)Malloc(MAX(C,R)*sizeof(*vrequest));
-		hrequest = (MPI_Request *)Malloc(MAX(C,R)*sizeof(*hrequest));
-
-		// exchange for mpi warm-up
-//		exchange_vert4x2(frt, frt_sigma, row_bl, vRbuf, row_bl, vRnum, vrequest, status, 1);
-		for(i = 0; i < C; i++) hSnum[i] = row_bl;
-		exchange_horiz4x2(hSbuf, row_bl, hSnum, hRbuf, row_bl, hRnum, hrequest, status, 1);
-	}
-	// FIXED NUMBER Approx-BC
-*/
 #ifdef _FINE_TIMINGS
     // Allocate for statistical data
     mystats = (STATDATA*)Malloc(N*sizeof(STATDATA));
@@ -1612,13 +1563,20 @@ int main(int argc, char *argv[]) {
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (outdebug!=NULL) fclose(outdebug);
 		fprintf(stdout, "WNODE Global-ID %d - Cluster-ID %d -  Local-ID %d ... closing\n",gmyid,color,  myid);
+    if (mycol == 0 && resname != NULL) {
+        FILE *resout = fopen(resname,"w");
 
+        LOCINT k;
+        for (k=0;k<row_pp;k++) {
+            fprintf(resout,"%d\t%.2f\n", LOCI2GI(k) ,dist_lcc[k]);
+        }
+        fclose(resout);
+    }
 	MPI_Barrier(MPI_COMM_WORLD);
 	freeMem(col);
 	freeMem(row);
 	freeMem(mystats);
 	freeMem(gfile);
-	//fincuda();
 	freeMem(degree);
 	freeMem(reach);
 	freeMem(vRbuf);

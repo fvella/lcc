@@ -9,7 +9,8 @@ AC_DEFUN([WITH_FOMPI],
     elif test x"${with_fompi}" == xno; then
         fompi_found=no
     elif test x"${with_fompi}" != x; then
-        CPPFLAGS="$CPPFLAGS -I${with_fompi}"
+        CPPFLAGS="$CPPFLAGS -I${with_fompi} ${CRAY_DMAPP_INCLUDE_OPTS}"
+        LDFLAGS="$LDFLAGS ${CRAY_DMAPP_POST_LINK_OPTS}"
         AC_CHECK_HEADER(fompi.h, [fompi_path=${with_fompi}; fompi_found=yes], [AC_MSG_ERROR([Can't find the foMPI header files in ${with_fompi}])])
     fi
 
@@ -19,12 +20,15 @@ AC_DEFUN([WITH_FOMPI],
         AC_SUBST([FOMPI_CFLAGS], [])
         AC_SUBST([FOMPI_LDFLAGS], [])
         if test x${fompi_path} != x; then
-            CXXFLAGS="${CXXFLAGS} -I${with_fompi}/"
-            LDFLAGS="${LDFLAGS} -L${fompi_path}"
+            CXXFLAGS="${CXXFLAGS} -I${with_fompi}/ fompi.ar"
+            #LDFLAGS="${LDFLAGS} -L${fompi_path}"
             AC_SUBST([FOMPI_CFLAGS], [-I${fompi_path}/])
-            AC_SUBST([FOMPI_LDFLAGS], [-L${fompi_path}])
+            #AC_SUBST([FOMPI_LDFLAGS], [-L${fompi_path}])
         fi
-        LIBS="${LIBS} -lfompi"
+        CXXFLAGS="${CXXFLAGS} ${CRAY_DMAPP_INCLUDE_OPTS} fompi.ar"
+        CCFLAGS="${CCFLAGS} fompi.ar"
+        LDFLAGS="${LDFLAGS} ${CRAY_DMAPP_POST_LINK_OPTS}"
+        #LIBS="${LIBS} -lfompi"
     fi
     ]
 )

@@ -1,0 +1,23 @@
+AC_INIT([LCC], 1.0)
+AC_CONFIG_SRCDIR(devel/src)
+AC_PROG_RANLIB
+AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_HEADERS([config.h])
+
+AM_INIT_AUTOMAKE([subdir-objects])
+
+AC_PROG_CXX
+AC_PROG_CC
+WITH_MPICC
+WITH_MPICXX
+WITH_LIBLSB
+WITH_FOMPI
+WITH_CLAMPI
+
+AC_SEARCH_LIBS([sqrt], [m])
+
+AC_SUBST(AM_CFLAGS)
+
+
+AC_OUTPUT([Makefile generator/Makefile devel/src/Makefile])
+

@@ -14,3 +14,10 @@ module switch PrgEnv-cray PrgEnv-gnu
 
 MPICC=cc MPICXX=CC ./configure <configure options>
 ```
+
+Type
+```
+./configure --help
+```
+for more configuration options (e.g., LibLSB, CLaMPI).
+

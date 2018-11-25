@@ -10,7 +10,7 @@ module load dmapp
 
 On Cray systems build with with:
 ```
-module swith PrgEnv-cray PrgEnv-gnu
+module switch PrgEnv-cray PrgEnv-gnu
 
 MPICC=cc MPICXX=CC ./configure <configure options>
 ```

@@ -6,13 +6,22 @@ Serial and distributed code for local clustering coefficient
 Generate configure script:
 ```
 ./autogen.sh
+```
+
+Configure and compile:
+```
 ./configure <configure options>
 make 
 make install
 ```
 
 
-**On Cray systems:**
+**Building on Cray systems:**
+
+Generate configure script:
+```
+./autogen.sh
+```
 
 To compile with foMPI load the dmapp module first:
 ```

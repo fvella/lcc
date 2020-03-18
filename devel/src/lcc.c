@@ -1106,6 +1106,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
     LOCINT c = 0;
     static LOCINT local_counter = 0;
     static int tid;
+    LOCINT reduction[32];
 #ifdef HAVE_CLAMPI
     CMPI_Win win_col;
     CMPI_Win win_row;
@@ -1230,16 +1231,16 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 			       local_counter += 1;
 		       reduction[tid] = local_counter;
 	       }
+          }
+          // Put the define here   
+          for (c = 0; c < 32; c++) counter += reduction[c];
+          lcc =(float) counter/(float)(row_offset*(row_offset-1));
       }
-    // Put the define here   
-      for (c = 0; c < 32; c++) counter += reduction[c];
-      lcc =(float) counter/(float)(row_offset*(row_offset-1));
-
        #ifdef HAVE_LIBLSB
       if (it > WARMUP)
         LSB_Rec(it);
 #endif
-
+      }
 #ifdef HAVE_CLAMPI
       CMPI_Win_invalidate(win_col);
       CMPI_Win_invalidate(win_row);

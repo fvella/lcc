@@ -1869,9 +1869,15 @@ int main(int argc, char *argv[]) {
   mystats = (STATDATA *)Malloc(N * sizeof(STATDATA));
   memset(mystats, 0, N * sizeof(STATDATA));
 #endif
-  lcc_func(col, row, dist_lcc);
+TIMER_START(0);
+#ifdef SERIAL 
+lcc_func(col, row, dist_lcc);
+#elif BIN_SIMD
+lcc_func_bin_simd(col, row, dist_lcc);
+#endif
+TIMER_STOP(0);
   // variables
-
+if (myid == 0) fprintf(stdout, "LCC_simd done in %f secs on %d rank\n",TIMER_ELAPSED(0)/1.0E+6, myid);
   // TEST prefix_byrow_float
 
   MPI_Barrier(MPI_COMM_WORLD);

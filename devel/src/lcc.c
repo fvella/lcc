@@ -19,7 +19,7 @@
 
 #include "config.h"
 
-#define RUNS 10
+#define RUNS 1
 #define WARMUP 0
 #include "mpi_wrapper.h"
 
@@ -31,8 +31,10 @@
 #include "clampi.h"
 #endif
 
-#ifdef WITH_SIMD
+#ifdef HAVE_SIMD
 #include <omp.h>
+#else
+#define SERIAL
 #endif
 
 #define VTAG(t) (0 * ntask + (t))
@@ -1153,7 +1155,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
     int it;
 
     for (it = 0; it < RUNS + WARMUP; it++) {
-      fprintf(stdout, "it: %i\n", it);
+      //fprintf(stdout, "it: %i\n", it);
 #ifdef HAVE_LIBLSB
       LSB_Res();
 #endif
@@ -1336,7 +1338,7 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output) {
     int it;
 
     for (it = 0; it < RUNS + WARMUP; it++) {
-      fprintf(stdout, "it: %i\n", it);
+      //fprintf(stdout, "it: %i\n", it);
 #ifdef HAVE_LIBLSB
       LSB_Res();
 #endif
@@ -1878,12 +1880,12 @@ int main(int argc, char *argv[]) {
 TIMER_START(0);
 #ifdef SERIAL 
 lcc_func(col, row, dist_lcc);
-#elif WITH_SIMD
+#elif HAVE_SIMD
 lcc_func_bin_simd(col, row, dist_lcc);
 #endif
 TIMER_STOP(0);
   // variables
-if (myid == 0) fprintf(stdout, "LCC_simd done in %f secs on %d rank\n",TIMER_ELAPSED(0)/1.0E+6, myid);
+if (myid == 0) fprintf(stdout, "LCC done in %f secs on %d rank\n",TIMER_ELAPSED(0)/1.0E+6, myid);
   // TEST prefix_byrow_float
 
   MPI_Barrier(MPI_COMM_WORLD);

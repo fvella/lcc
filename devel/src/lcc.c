@@ -1089,7 +1089,7 @@ LOCINT bin_search(LOCINT *arr, int l, int r, LOCINT x){
 }
 
 
-
+#ifdef WITH_SIMD
 void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
   LOCINT i = 0;
   if (R == 1) {
@@ -1272,6 +1272,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
     freeMem(adj_local);
   }
 }
+#endif
 
 
 
@@ -1873,7 +1874,7 @@ int main(int argc, char *argv[]) {
 TIMER_START(0);
 #ifdef SERIAL 
 lcc_func(col, row, dist_lcc);
-#elif BIN_SIMD
+#elif WITH_SIMD
 lcc_func_bin_simd(col, row, dist_lcc);
 #endif
 TIMER_STOP(0);

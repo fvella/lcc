@@ -16,7 +16,7 @@
 #include <unistd.h>
 #define GRAPH_GENERATOR_MPI
 #include "../../generator/make_graph.h"
-#include <omp.h>
+
 #include "config.h"
 
 #define RUNS 10
@@ -29,6 +29,10 @@
 
 #ifdef HAVE_CLAMPI
 #include "clampi.h"
+#endif
+
+#ifdef WITH_SIMD
+#include <omp.h>
 #endif
 
 #define VTAG(t) (0 * ntask + (t))

@@ -58,6 +58,7 @@ int gmyid;
 int myid;
 int gntask;
 int ntask;
+static int nthreads=1;
 int mono = 1;
 int undirected = 1;
 int analyze_degree = 0;
@@ -1095,7 +1096,7 @@ LOCINT bin_search(LOCINT *arr, int l, int r, LOCINT x){
 }
 
 
-#ifdef WITH_SIMD
+#ifdef HAVE_SIMD
 void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
   LOCINT i = 0;
   if (R == 1) {
@@ -1877,16 +1878,28 @@ int main(int argc, char *argv[]) {
   mystats = (STATDATA *)Malloc(N * sizeof(STATDATA));
   memset(mystats, 0, N * sizeof(STATDATA));
 #endif
+
+
+
+#ifdef SERIAL
+if (myid == 0) fprintf(stdout, "Computing LCC using %d process on %d core per process\n", ntask, 1);
 TIMER_START(0);
-#ifdef SERIAL 
 lcc_func(col, row, dist_lcc);
-#elif HAVE_SIMD
-lcc_func_bin_simd(col, row, dist_lcc);
-#endif
 TIMER_STOP(0);
-  // variables
+
+#elif HAVE_SIMD
+#pragma omp parallel
+{
+		nthreads = omp_get_num_threads();
+}
+if (myid == 0) fprintf(stdout, "Computing LCC using %d process on %d core per process\n", ntask, nthreads);
+TIMER_START(0);
+lcc_func_bin_simd(col, row, dist_lcc);
+TIMER_STOP(0);
+#endif
+
+
 if (myid == 0) fprintf(stdout, "LCC done in %f secs on %d rank\n",TIMER_ELAPSED(0)/1.0E+6, myid);
-  // TEST prefix_byrow_float
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (gmyid == 0) {

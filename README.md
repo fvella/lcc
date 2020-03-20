@@ -1,5 +1,5 @@
 # lcc
-Serial and distributed code for local clustering coefficient
+Serial, parallel and distributed code for local clustering coefficient
 
 # Buiding LCC
 

@@ -1093,6 +1093,7 @@ LOCINT bin_search(LOCINT *arr, int l, int r, LOCINT x){
 		if (arr[m] < x) l = m + 1;
 		else r = m - 1;
 	}
+        return 0;
 }
 
 
@@ -1213,7 +1214,9 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 	          for (vv = 0; vv < r_offset; vv++){
 		      if (adj_v[vv] == LOCI2GI(i)) continue;
 		      if (bin_search(adj_local,0, row_offset-1, adj_v[vv]))
+		      {
 			      counter +=1;
+		      }
 	          }
                }
                else{
@@ -1223,7 +1226,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 		      if (bin_search(adj_local,0, row_offset-1, adj_v[vv])) local_counter += 1;
 		      reduction[tid] = local_counter;
 	          }
-               } 
+               }
 	   } //end jj loop
            if (row_offset == 1 || row_offset == 0){
 		  lcc = 0;
@@ -1861,7 +1864,8 @@ int main(int argc, char *argv[]) {
 
 
 #ifdef SERIAL
-if (myid == 0) fprintf(stdout, "Computing LCC using %d process on %d core per process\n", ntask, 1);
+ 
+if (myid == 0) fprintf(stdout, "Computing LCC [SERIAL] using %d process on %d core per process\n", ntask, 1);
 TIMER_START(0);
 lcc_func(col, row, dist_lcc);
 TIMER_STOP(0);
@@ -1871,7 +1875,7 @@ TIMER_STOP(0);
 {
 		nthreads = omp_get_num_threads();
 }
-if (myid == 0) fprintf(stdout, "Computing LCC using %d process on %d core per process\n", ntask, nthreads);
+if (myid == 0) fprintf(stdout, "Computing LCC [BIN_SIMD] using %d process on %d core per process\n", ntask, nthreads);
 TIMER_START(0);
 lcc_func_bin_simd(col, row, dist_lcc);
 TIMER_STOP(0);

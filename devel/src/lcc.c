@@ -1180,27 +1180,26 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
                gvid = LOCI2GI(row[col[i] + jj]); // offset gvid in proc dest_get is gvid % C
                dest_get = VERT2PROC(gvid);
                off_start = gvid % col_bl;
-               // continue; skip degree-1 to do
                if (dest_get != myid) {
 #ifdef HAVE_CLAMPI
-                  gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col);
-                  if (gres != CL_HIT) CMPI_Win_flush(dest_get, win_col);
+                   gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col);
+                   if (gres != CL_HIT) CMPI_Win_flush(dest_get, win_col);
 #else
-                  MMPI_GET(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col);
-                  MMPI_WIN_FLUSH(dest_get, win_col);
+                   MMPI_GET(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col);
+                   MMPI_WIN_FLUSH(dest_get, win_col);
 #endif
 
 #ifdef HAVE_CLAMPI
-                  gres =
-                     CMPI_Get(adj_v, r_off[1] - r_off[0], MPI_UINT32_T, dest_get,
-                         r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row);
-                  if (gres != CL_HIT) CMPI_Win_flush(dest_get, win_row);
+                   gres =
+                      CMPI_Get(adj_v, r_off[1] - r_off[0], MPI_UINT32_T, dest_get,
+                          r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row);
+                   if (gres != CL_HIT) CMPI_Win_flush(dest_get, win_row);
 #else
-                  MMPI_GET(adj_v, r_off[1] - r_off[0], MPI_UINT32_T, dest_get,
+                   MMPI_GET(adj_v, r_off[1] - r_off[0], MPI_UINT32_T, dest_get,
                      r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row);
-                  MMPI_WIN_FLUSH(dest_get, win_row);
+                   MMPI_WIN_FLUSH(dest_get, win_row);
 #endif
-                  nget++;
+                   nget++;
                } 
 	       else {
                   r_off[0] = col[off_start];

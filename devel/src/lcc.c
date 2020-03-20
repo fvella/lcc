@@ -1098,90 +1098,90 @@ LOCINT bin_search(LOCINT *arr, int l, int r, LOCINT x){
 
 #ifdef HAVE_SIMD
 void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
-  LOCINT i = 0;
-  int dest_get;
-  LOCINT jj = 0;
-  LOCINT vv = 0;
-  LOCINT vvv = 0;
-  LOCINT counter = 0;
-  LOCINT gvid = 0;
-  LOCINT r_off[2] = {0, 0};
-  LOCINT row_offset, off_start = 0;
-  float lcc = 0;
+   LOCINT i = 0;
+   int dest_get;
+   LOCINT jj = 0;
+   LOCINT vv = 0;
+   LOCINT vvv = 0;
+   LOCINT counter = 0;
+   LOCINT gvid = 0;
+   LOCINT r_off[2] = {0, 0};
+   LOCINT row_offset, off_start = 0;
+   float lcc = 0;
 // Variable for SIMD 
-  LOCINT c = 0;
-  static LOCINT local_counter = 0;
-  static int tid;
-  LOCINT reduction[32];
+   LOCINT c = 0;
+   static LOCINT local_counter = 0;
+   static int tid;
+   LOCINT reduction[32];
 
 
 #ifdef HAVE_CLAMPI
-  CMPI_Win win_col;
-  CMPI_Win win_row;
-  CMPI_Win_create(col, col_bl * sizeof(LOCINT), sizeof(LOCINT), MPI_INFO_NULL,
+   CMPI_Win win_col;
+   CMPI_Win win_row;
+   CMPI_Win_create(col, col_bl * sizeof(LOCINT), sizeof(LOCINT), MPI_INFO_NULL,
                     Row_comm, &win_col);
-  CMPI_Win_create(row, col[col_bl] * sizeof(LOCINT), sizeof(LOCINT),
+   CMPI_Win_create(row, col[col_bl] * sizeof(LOCINT), sizeof(LOCINT),
                     MPI_INFO_NULL, Row_comm, &win_row);
-  MMPI_WIN_LOCK_ALL(0, win_col.win);
-  MMPI_WIN_LOCK_ALL(0, win_row.win);
+   MMPI_WIN_LOCK_ALL(0, win_col.win);
+   MMPI_WIN_LOCK_ALL(0, win_row.win);
 #else
-  MMPI_WIN win_col;
-  MMPI_WIN win_row;
-  MMPI_WIN_CREATE(col, col_bl * sizeof(LOCINT), sizeof(LOCINT), MPI_INFO_NULL,
+   MMPI_WIN win_col;
+   MMPI_WIN win_row;
+   MMPI_WIN_CREATE(col, col_bl * sizeof(LOCINT), sizeof(LOCINT), MPI_INFO_NULL,
                     Row_comm, &win_col);
-  MMPI_WIN_CREATE(row, col[col_bl] * sizeof(LOCINT), sizeof(LOCINT),
+   MMPI_WIN_CREATE(row, col[col_bl] * sizeof(LOCINT), sizeof(LOCINT),
                     MPI_INFO_NULL, Row_comm, &win_row);
-  MMPI_WIN_LOCK_ALL(0, win_col);
-  MMPI_WIN_LOCK_ALL(0, win_row);
+   MMPI_WIN_LOCK_ALL(0, win_col);
+   MMPI_WIN_LOCK_ALL(0, win_row);
 #endif
 
-  LOCINT *adj_v = (LOCINT *)Malloc(row_pp * sizeof(LOCINT));
-  LOCINT *adj_local = (LOCINT *)Malloc(row_pp * sizeof(LOCINT));
+   LOCINT *adj_v = (LOCINT *)Malloc(row_pp * sizeof(LOCINT));
+   LOCINT *adj_local = (LOCINT *)Malloc(row_pp * sizeof(LOCINT));
 
-  LOCINT nget = 0;
-  LOCINT nlocal = 0;
-  LOCINT zerouno = 0;
+   LOCINT nget = 0;
+   LOCINT nlocal = 0;
+   LOCINT zerouno = 0;
 #ifdef HAVE_LIBLSB
-  LSB_Set_Rparam_int("rank", gmyid);
-  LSB_Set_Rparam_int("csize", gntask);
+   LSB_Set_Rparam_int("rank", gmyid);
+   LSB_Set_Rparam_int("csize", gntask);
 
 #ifdef HAVE_CLAMPI
-  LSB_Set_Rparam_string("type", "CLAMPI");
+   LSB_Set_Rparam_string("type", "CLAMPI");
 #else
-  LSB_Set_Rparam_string("type", "MPI");
+   LSB_Set_Rparam_string("type", "MPI");
 #endif
 
 #endif
 
-  int gres;
-  int it;
+   int gres;
+   int it;
 
-  for (it = 0; it < RUNS + WARMUP; it++) {
+   for (it = 0; it < RUNS + WARMUP; it++) {
 #ifdef HAVE_LIBLSB
-      LSB_Res();
+       LSB_Res();
 #endif
 
 #pragma omp threadprivate(local_counter, tid)
 #pragma omp parallel
-      tid = omp_get_thread_num();
-      for (i = 0; i < col_bl; i++) {
-          row_offset = col[i + 1] - col[i];
-          memcpy(adj_local, &row[col[i]], row_offset * sizeof(LOCINT));
-          counter = 0;
+       tid = omp_get_thread_num();
+       for (i = 0; i < col_bl; i++) {
+           row_offset = col[i + 1] - col[i];
+	   if (row_offset == 1) continue; // here you can compute degree like deg[i] = row_offset
+           memcpy(adj_local, &row[col[i]], row_offset * sizeof(LOCINT));
+           counter = 0;
 #pragma omp parallel
 {
-          local_counter = 0;
+           local_counter = 0;
 }
-
 // USE A CONSTANT HERE DEPENDS ON HOW MANY COREs YOU ARE USING 
-          for (c = 0; c < 32; c++) reduction[c] = 0;
+           for (c = 0; c < 32; c++) reduction[c] = 0;
 
-          for (jj = 0; jj < row_offset; jj++) {
-              gvid = LOCI2GI(row[col[i] + jj]); // offset gvid in proc dest_get is gvid % C
-              dest_get = VERT2PROC(gvid);
-              off_start = gvid % col_bl;
-              // continue; skip degree-1 to do
-              if (dest_get != myid) {
+           for (jj = 0; jj < row_offset; jj++) {
+               gvid = LOCI2GI(row[col[i] + jj]); // offset gvid in proc dest_get is gvid % C
+               dest_get = VERT2PROC(gvid);
+               off_start = gvid % col_bl;
+               // continue; skip degree-1 to do
+               if (dest_get != myid) {
 #ifdef HAVE_CLAMPI
                   gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col);
                   if (gres != CL_HIT) CMPI_Win_flush(dest_get, win_col);
@@ -1201,69 +1201,67 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
                   MMPI_WIN_FLUSH(dest_get, win_row);
 #endif
                   nget++;
-             } 
-	     else {
+               } 
+	       else {
                   r_off[0] = col[off_start];
                   r_off[1] = col[off_start + 1];
                   memcpy(adj_v, &row[r_off[0]], (r_off[1] - r_off[0]) * sizeof(LOCINT));
                   nlocal++;
-             }
-             // Compute LCC
-             int r_offset = r_off[1]-r_off[0];
-             if (r_offset < 32){
+               }
+               // Compute LCC
+               int r_offset = r_off[1]-r_off[0];
+               if (r_offset < 32){
 	          for (vv = 0; vv < r_offset; vv++){
 		      if (adj_v[vv] == LOCI2GI(i)) continue;
 		      if (bin_search(adj_local,0, row_offset-1, adj_v[vv]))
 			      counter +=1;
 	          }
-             }
-             else{
+               }
+               else{
 #pragma omp parallel for schedule(dynamic, 8) // Put a define here 
 	          for (vv = 0; vv < r_offset; vv++){
 		      if (adj_v[vv] == LOCI2GI(i)) continue;
 		      if (bin_search(adj_local,0, row_offset-1, adj_v[vv])) local_counter += 1;
 		      reduction[tid] = local_counter;
 	          }
-             }
-	  } //end jj loop
-          if (row_offset == 1 || row_offset == 0){
+               } 
+	   } //end jj loop
+           if (row_offset == 1 || row_offset == 0){
 		  lcc = 0;
-	  }  
-	  else{  // Put the define here   
+	   }  
+	   else{  // Put the define here   
                   for (c = 0; c < 32; c++) counter += reduction[c];
                   lcc = (float) counter/(float)(row_offset*(row_offset-1));
-	  }
-          output[i] = lcc;
+	   }
+           output[i] = lcc;
 #ifdef HAVE_LIBLSB
-      if (it > WARMUP)
-        LSB_Rec(it);
+           if (it > WARMUP)
+           LSB_Rec(it);
 #endif
-      }// end col_block loop
+       }// end col_block loop
 #ifdef HAVE_CLAMPI
-      CMPI_Win_invalidate(win_col);
-      CMPI_Win_invalidate(win_row);
+       CMPI_Win_invalidate(win_col);
+       CMPI_Win_invalidate(win_row);
 #endif
-    }
+   } // End WARM-UP + RUN loop 
 
 #ifdef HAVE_CLAMPI
-    MMPI_WIN_UNLOCK_ALL(win_col.win);
-    MMPI_WIN_UNLOCK_ALL(win_row.win);
-    CMPI_Win_invalidate(win_col);
-    CMPI_Win_invalidate(win_row);
-
-    CMPI_Win_free(&win_col);
-    CMPI_Win_free(&win_row);
+   MMPI_WIN_UNLOCK_ALL(win_col.win);
+   MMPI_WIN_UNLOCK_ALL(win_row.win);
+   CMPI_Win_invalidate(win_col);
+   CMPI_Win_invalidate(win_row);
+   CMPI_Win_free(&win_col);
+   CMPI_Win_free(&win_row);
 #else
-    MMPI_WIN_UNLOCK_ALL(win_col);
-    MMPI_WIN_UNLOCK_ALL(win_row);
-    MMPI_WIN_FREE(&win_col);
-    MMPI_WIN_FREE(&win_row);
+   MMPI_WIN_UNLOCK_ALL(win_col);
+   MMPI_WIN_UNLOCK_ALL(win_row);
+   MMPI_WIN_FREE(&win_col);
+   MMPI_WIN_FREE(&win_row);
 #endif
-
-    freeMem(adj_v);
-    freeMem(adj_local);
+   freeMem(adj_v);
+   freeMem(adj_local);
 }
-#endif
+#endif //END HAVE_SIMD 
 
 
 

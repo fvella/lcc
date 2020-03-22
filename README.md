@@ -1,5 +1,5 @@
-# lcc
-Serial, parallel and distributed code for local clustering coefficient
+# Lcc
+Serial, parallel and distributed code for the computation of the local clustering coefficient on large scale graphs.
 
 # Buiding LCC
 

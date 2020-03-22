@@ -41,5 +41,5 @@ Type
 ```
 ./configure --help
 ```
-for more configuration options (e.g., LibLSB, CLaMPI).
+for more configuration options (e.g., LibLSB, CLaMPI, SIMD version).
 

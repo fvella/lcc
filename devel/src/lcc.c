@@ -19,8 +19,6 @@
 
 #include "config.h"
 
-#include "lcc_benchmark.h"
-
 #define RUNS 1
 #define WARMUP 0
 #include "mpi_wrapper.h"
@@ -60,7 +58,7 @@ int gmyid;
 int myid;
 int gntask;
 int ntask;
-static int nthreads = 1;
+static int nthreads=1;
 int mono = 1;
 int undirected = 1;
 int analyze_degree = 0;
@@ -85,14 +83,12 @@ static size_t tot_dev_mem = 0;
 
 MPI_Comm Row_comm, Col_comm;
 
-static void freeMem(void *p)
-{
+static void freeMem(void *p) {
   if (p)
     free(p);
 }
 
-static void prexit(const char *fmt, ...)
-{
+static void prexit(const char *fmt, ...) {
 
   int myid;
   va_list ap;
@@ -105,14 +101,12 @@ static void prexit(const char *fmt, ...)
   exit(EXIT_FAILURE);
 }
 
-void *Malloc(size_t sz)
-{
+void *Malloc(size_t sz) {
 
   void *ptr;
 
   ptr = (void *)malloc(sz);
-  if (!ptr)
-  {
+  if (!ptr) {
     fprintf(stderr, "Cannot allocate %zu bytes...\n", sz);
     exit(EXIT_FAILURE);
   }
@@ -125,8 +119,7 @@ void *Malloc(size_t sz)
 /*
  * Print statistics
  */
-void prstat(uint64_t val, const char *msg, int det)
-{
+void prstat(uint64_t val, const char *msg, int det) {
 
   int myid, ntask, i, j, w1, w2, min, max;
   uint64_t t, *v = NULL;
@@ -141,13 +134,11 @@ void prstat(uint64_t val, const char *msg, int det)
   MPI_Gather(&val, 1, MPI_UNSIGNED_LONG_LONG, v, 1, MPI_UNSIGNED_LONG_LONG, 0,
              MPI_COMM_CLUSTER);
 
-  if (myid == 0)
-  {
+  if (myid == 0) {
     t = 0;
     m = s = 0.0;
     min = max = 0;
-    for (i = 0; i < ntask; i++)
-    {
+    for (i = 0; i < ntask; i++) {
       if (v[i] < v[min])
         min = i;
       if (v[i] > v[max])
@@ -160,19 +151,16 @@ void prstat(uint64_t val, const char *msg, int det)
     s = sqrt((1.0 / (ntask - 1)) * (s - ntask * m * m));
 
     fprintf(stdout, "%s", msg);
-    if (det)
-    {
+    if (det) {
       for (w1 = 0, val = ntask; val; val /= 10, w1++)
         ;
       for (w2 = 0, val = v[max]; val; val /= 10, w2++)
         ;
 
       fprintf(stdout, "\n");
-      for (i = 0; i < R; i++)
-      {
+      for (i = 0; i < R; i++) {
         fprintf(stdout, " ");
-        for (j = 0; j < C; j++)
-        {
+        for (j = 0; j < C; j++) {
           fprintf(stdout, "%*d: %*" PRIu64 "  ", w1, i * C + j, w2,
                   v[i * C + j]);
         }
@@ -189,56 +177,48 @@ void prstat(uint64_t val, const char *msg, int det)
   return;
 }
 
-static void *Realloc(void *ptr, size_t sz)
-{
+static void *Realloc(void *ptr, size_t sz) {
 
   void *lp;
 
   lp = (void *)realloc(ptr, sz);
-  if (!lp && sz)
-  {
+  if (!lp && sz) {
     fprintf(stderr, "Cannot reallocate to %zu bytes...\n", sz);
     exit(EXIT_FAILURE);
   }
   return lp;
 }
 
-static FILE *Fopen(const char *path, const char *mode)
-{
+static FILE *Fopen(const char *path, const char *mode) {
 
   FILE *fp = NULL;
   fp = fopen(path, mode);
-  if (!fp)
-  {
+  if (!fp) {
     fprintf(stderr, "Cannot open file %s...\n", path);
     exit(EXIT_FAILURE);
   }
   return fp;
 }
-static off_t get_fsize(const char *fpath)
-{
+static off_t get_fsize(const char *fpath) {
 
   struct stat st;
   int rv;
 
   rv = stat(fpath, &st);
-  if (rv)
-  {
+  if (rv) {
     fprintf(stderr, "Cannot stat file %s...\n", fpath);
     exit(EXIT_FAILURE);
   }
   return st.st_size;
 }
 
-static uint64_t getFsize(FILE *fp)
-{
+static uint64_t getFsize(FILE *fp) {
 
   int rv;
   uint64_t size = 0;
 
   rv = fseek(fp, 0, SEEK_END);
-  if (rv != 0)
-  {
+  if (rv != 0) {
     fprintf(stderr, "SEEK END FAILED\n");
     if (ferror(fp))
       fprintf(stderr, "FERROR SET\n");
@@ -248,8 +228,7 @@ static uint64_t getFsize(FILE *fp)
   size = ftell(fp);
   rv = fseek(fp, 0, SEEK_SET);
 
-  if (rv != 0)
-  {
+  if (rv != 0) {
     fprintf(stderr, "SEEK SET FAILED\n");
     exit(EXIT_FAILURE);
   }
@@ -260,20 +239,16 @@ static uint64_t getFsize(FILE *fp)
  * Duplicates vertices to make graph undirected
  *
  */
-static uint64_t *mirror(uint64_t *ed, uint64_t *ned)
-{
+static uint64_t *mirror(uint64_t *ed, uint64_t *ned) {
 
   uint64_t i, n;
 
-  if (undirected == 1)
-  {
+  if (undirected == 1) {
     ed = (uint64_t *)Realloc(ed, (ned[0] * 4) * sizeof(*ed));
 
     n = 0;
-    for (i = 0; i < ned[0]; i++)
-    {
-      if (ed[2 * i] != ed[2 * i + 1])
-      {
+    for (i = 0; i < ned[0]; i++) {
+      if (ed[2 * i] != ed[2 * i + 1]) {
         ed[2 * ned[0] + 2 * n] = ed[2 * i + 1];
         ed[2 * ned[0] + 2 * n + 1] = ed[2 * i];
         n++;
@@ -288,8 +263,7 @@ static uint64_t *mirror(uint64_t *ed, uint64_t *ned)
  * Read graph data from file
  */
 static uint64_t read_graph(int myid, int ntask, const char *fpath,
-                           uint64_t **edge)
-{
+                           uint64_t **edge) {
 #define ALLOC_BLOCK (2 * 1024)
 
   uint64_t *ed = NULL;
@@ -309,15 +283,13 @@ static uint64_t read_graph(int myid, int ntask, const char *fpath,
   off1 = (size / ntask) * myid + ((myid > rem) ? rem : myid);
   off2 = (size / ntask) * (myid + 1) + (((myid + 1) > rem) ? rem : (myid + 1));
 
-  if (myid < (ntask - 1))
-  {
+  if (myid < (ntask - 1)) {
     fseek(fp, off2, SEEK_SET);
     fgets(str, MAX_LINE, fp);
     off2 = ftell(fp);
   }
   fseek(fp, off1, SEEK_SET);
-  if (myid > 0)
-  {
+  if (myid > 0) {
     fgets(str, MAX_LINE, fp);
     off1 = ftell(fp);
   }
@@ -330,39 +302,34 @@ static uint64_t read_graph(int myid, int ntask, const char *fpath,
   int comment_counter = 0;
 
   /* read edges from file */
-  while (ftell(fp) < off2)
-  {
+  while (ftell(fp) < off2) {
 
     // Read the whole line
     fgets(str, MAX_LINE, fp);
 
     // Strip # from the beginning of the line
-    if (strstr(str, "#") != NULL)
-    {
+    if (strstr(str, "#") != NULL) {
       // fprintf(stdout, "\nreading line number %"PRIu64": %s\n", lcounter,
       // str);
-      if (strstr(str, "Nodes:"))
-      {
+      if (strstr(str, "Nodes:")) {
         sscanf(str, "# Nodes: %" PRIu64 " Edges: %" PRIu64 "\n", &i, &nedges);
         fprintf(stdout, "N=%" PRIu64 " E=%" PRIu64 "\n", i, nedges);
       }
       comment_counter++;
-    }
-    else if (str[0] != '\0')
-    {
+    } else if (str[0] != '\0') {
       lcounter++;
       // Read edges
       sscanf(str, "%" PRIu64 " %" PRIu64 "\n", &i, &j);
 
-      if (i >= N || j >= N)
-      {
-        fprintf(stderr, "[%d] In file %s line %" PRIu64 " found invalid edge in %s for N=%" PRIu64 ": (%" PRIu64 ", %" PRIu64 ")\n",
+      if (i >= N || j >= N) {
+        fprintf(stderr, "[%d] In file %s line %" PRIu64
+                        " found invalid edge in %s for N=%" PRIu64 ": (%" PRIu64
+                        ", %" PRIu64 ")\n",
                 myid, fpath, lcounter, str, N, i, j);
         exit(EXIT_FAILURE);
       }
 
-      if (n >= nmax)
-      {
+      if (n >= nmax) {
         nmax += ALLOC_BLOCK;
         ed = (uint64_t *)Realloc(ed, nmax * sizeof(*ed));
       }
@@ -392,10 +359,13 @@ static uint64_t read_graph(int myid, int ntask, const char *fpath,
 }
 
 /*
+ *  select one root vertex randomly
+ */
+
+/*
  * Generate RMAT graph calling make_graph function
  */
-static uint64_t gen_graph(int scale, int edgef, uint64_t **ed)
-{
+static uint64_t gen_graph(int scale, int edgef, uint64_t **ed) {
 
   uint64_t ned;
   double initiator[4] = {.57, .19, .19, .05};
@@ -407,8 +377,7 @@ static uint64_t gen_graph(int scale, int edgef, uint64_t **ed)
   return ned;
 }
 
-static void dump_edges(uint64_t *ed, uint64_t nedge, const char *desc)
-{
+static void dump_edges(uint64_t *ed, uint64_t nedge, const char *desc) {
 
   uint64_t i;
   fprintf(outdebug, "%s - %ld\n", desc, nedge);
@@ -420,8 +389,7 @@ static void dump_edges(uint64_t *ed, uint64_t nedge, const char *desc)
   return;
 }
 
-static int cmpedge_1d(const void *p1, const void *p2)
-{
+static int cmpedge_1d(const void *p1, const void *p2) {
   uint64_t *l1 = (uint64_t *)p1;
   uint64_t *l2 = (uint64_t *)p2;
   if (l1[0] < l2[0])
@@ -434,8 +402,7 @@ static int cmpedge_1d(const void *p1, const void *p2)
     return 1;
   return 0;
 }
-static void dump_rmat(uint64_t *myedges, uint64_t myned, int scale, int edgef)
-{
+static void dump_rmat(uint64_t *myedges, uint64_t myned, int scale, int edgef) {
 
   FILE *fout = NULL;
   char fname[256];
@@ -447,8 +414,7 @@ static void dump_rmat(uint64_t *myedges, uint64_t myned, int scale, int edgef)
   snprintf(fname, 256, "rmat_S%d_EF%d.txt", scale, edgef);
   fprintf(stdout, "DUMP THE GENERATED RMAT FILE IN %s\n", fname);
   fout = fopen(fname, "w+");
-  if (fout == NULL)
-  {
+  if (fout == NULL) {
     fprintf(stderr, "in function %s: error opening %s\n", __func__, fname);
     exit(EXIT_FAILURE);
   }
@@ -458,8 +424,7 @@ static void dump_rmat(uint64_t *myedges, uint64_t myned, int scale, int edgef)
   // fprintf(fout, "#\n");
   // fprintf(fout, "# Nodes: %"PRIu64" Edges: %"PRIu64"\n", max, myned);
   // fprintf(fout, "# NodeId\tNodeId\n");
-  for (i = 0; i < myned; i++)
-  {
+  for (i = 0; i < myned; i++) {
     fprintf(fout, "%" PRIu64 "\t%" PRIu64 "\n", myedges[2 * i],
             myedges[2 * i + 1]);
   }
@@ -472,8 +437,7 @@ static void dump_rmat(uint64_t *myedges, uint64_t myned, int scale, int edgef)
  * MPI exchange edges based on 2-D partitioning
  */
 static uint64_t part_graph(int myid, int ntask, uint64_t **ed, uint64_t nedge,
-                           int part_mode)
-{
+                           int part_mode) {
 
   uint64_t i;
 
@@ -496,13 +460,11 @@ static uint64_t part_graph(int myid, int ntask, uint64_t **ed, uint64_t nedge,
   /* compute processor mask for edges */
   pmask = (int *)Malloc(nedge * sizeof(*pmask));
   send_n = (uint64_t *)Malloc(ntask * sizeof(*send_n));
-  for (i = 0; i < nedge; i++)
-  {
-    if (part_mode == 1)
-    {
+  for (i = 0; i < nedge; i++) {
+    if (part_mode == 1) {
       pmask[i] = r_ed[2 * i] % ntask; // 1D partiorning
-    }
-    else
+
+    } else
       pmask[i] = EDGE2PROC(r_ed[2 * i], r_ed[2 * i + 1]);
     send_n[pmask[i]]++;
   }
@@ -517,8 +479,7 @@ static uint64_t part_graph(int myid, int ntask, uint64_t **ed, uint64_t nedge,
   memcpy(recv_n, soff, ntask * sizeof(*soff));
 
   s_ed = (uint64_t *)Malloc(2 * nedge * sizeof(*s_ed));
-  for (i = 0; i < nedge; i++)
-  {
+  for (i = 0; i < nedge; i++) {
     s_ed[2 * recv_n[pmask[i]]] = r_ed[2 * i];
     s_ed[2 * recv_n[pmask[i]] + 1] = r_ed[2 * i + 1];
     recv_n[pmask[i]]++;
@@ -526,8 +487,7 @@ static uint64_t part_graph(int myid, int ntask, uint64_t **ed, uint64_t nedge,
   /* to proc k must be send send_n[k] edges starting at s_ei[soff[k]] */
   MPI_Alltoall(send_n, 1, MPI_UNSIGNED_LONG_LONG, recv_n, 1,
                MPI_UNSIGNED_LONG_LONG, MPI_COMM_CLUSTER);
-  if (send_n[myid] != recv_n[myid])
-  {
+  if (send_n[myid] != recv_n[myid]) {
     fprintf(stderr, "[%d] Error in %s:%d\n", myid, __func__, __LINE__);
     exit(EXIT_FAILURE);
   }
@@ -535,8 +495,7 @@ static uint64_t part_graph(int myid, int ntask, uint64_t **ed, uint64_t nedge,
   roff = (uint64_t *)Malloc(ntask * sizeof(*roff));
   roff[0] = 0;
   totrecv = recv_n[0];
-  for (p = 1; p < ntask; p++)
-  {
+  for (p = 1; p < ntask; p++) {
     totrecv += recv_n[p];
     roff[p] = roff[p - 1] + recv_n[p - 1];
   }
@@ -546,8 +505,7 @@ static uint64_t part_graph(int myid, int ntask, uint64_t **ed, uint64_t nedge,
   request = (MPI_Request *)Malloc(ntask * sizeof(*request));
 
   /* post RECVs */
-  for (p = 0, n = 0; p < ntask; p++)
-  {
+  for (p = 0, n = 0; p < ntask; p++) {
     if (recv_n[p] == 0 || p == myid)
       continue;
     MPI_Irecv(r_ed + 2 * roff[p], 2 * recv_n[p], MPI_UNSIGNED_LONG_LONG, p,
@@ -557,8 +515,7 @@ static uint64_t part_graph(int myid, int ntask, uint64_t **ed, uint64_t nedge,
   /* do the SENDs */
   memcpy(r_ed + 2 * roff[myid], s_ed + 2 * soff[myid],
          2 * send_n[myid] * sizeof(*s_ed));
-  for (p = 0; p < ntask; p++)
-  {
+  for (p = 0; p < ntask; p++) {
     if (send_n[p] == 0 || p == myid)
       continue;
     MPI_Send(s_ed + 2 * soff[p], 2 * send_n[p], MPI_UNSIGNED_LONG_LONG, p,
@@ -587,8 +544,7 @@ static uint64_t part_graph(int myid, int ntask, uint64_t **ed, uint64_t nedge,
  * processor than compares
  * tail and than head
  */
-static int cmpedge(const void *p1, const void *p2)
-{
+static int cmpedge(const void *p1, const void *p2) {
   uint64_t *l1 = (uint64_t *)p1;
   uint64_t *l2 = (uint64_t *)p2;
   if (EDGE2PROC(l1[0], l1[1]) < EDGE2PROC(l2[0], l2[1]))
@@ -607,8 +563,7 @@ static int cmpedge(const void *p1, const void *p2)
 }
 
 static LOCINT degree_reduction(int myid, int ntask, uint64_t **ed,
-                               uint64_t nedge, uint64_t **edrem, LOCINT *ner)
-{
+                               uint64_t nedge, uint64_t **edrem, LOCINT *ner) {
   uint64_t u = -1, v = -1, next_u = -1, next_v = -1, prev_u = -1;
   uint64_t i, j;
   uint64_t *n_ed = NULL; // new edge list
@@ -633,29 +588,24 @@ static LOCINT degree_reduction(int myid, int ntask, uint64_t **ed,
 
   fprintf(stdout, "[rank %d] Memory allocated\n", myid);
 
-  for (i = 0; i < nedge - 1; i++)
-  {
+  for (i = 0; i < nedge - 1; i++) {
     u = r_ed[2 * i];
     v = r_ed[2 * i + 1]; // current is ( u,v )    next pair is next_u, next_t
                          // based on index j
     j = 2 * i + 2;
     next_u = r_ed[j];
     next_v = r_ed[j + 1];
-    if ((u == v) || ((u == next_u) && (v == next_v)))
-    { // Skip
+    if ((u == v) || ((u == next_u) && (v == next_v))) { // Skip
       skipped++;
       prev_u = u;
       continue;
     }
-    if ((u != next_u) && (u != prev_u))
-    {
+    if ((u != next_u) && (u != prev_u)) {
       // This is a 1-degre remove
       o_ed[2 * nod] = v;
       o_ed[2 * nod + 1] = u;
       nod++;
-    }
-    else
-    { // this is a first of a series or within a series
+    } else { // this is a first of a series or within a series
       n_ed[2 * ne] = u;
       n_ed[2 * ne + 1] = v;
       ne++;
@@ -665,14 +615,11 @@ static LOCINT degree_reduction(int myid, int ntask, uint64_t **ed,
   // Check last edge
   u = r_ed[2 * nedge - 2];
   v = r_ed[2 * nedge - 1];
-  if (u == prev_u)
-  {
+  if (u == prev_u) {
     n_ed[2 * ne] = u;
     n_ed[2 * ne + 1] = v;
     ne++;
-  }
-  else if (u != v)
-  { // 1-degree store v before u
+  } else if (u != v) { // 1-degree store v before u
     o_ed[2 * nod] = v;
     o_ed[2 * nod + 1] = u;
     nod++;
@@ -692,41 +639,34 @@ static LOCINT degree_reduction(int myid, int ntask, uint64_t **ed,
   // dump_edges(o_ed, nod, "edges removed");
 
   // remove edges for vertices removed in the previous step
-  if (nod > 0)
-  {
+  if (nod > 0) {
     // Number of edges left after 1-degree removal
     nedge = ne;
     // nod is the number of edges we need to remove after exchange
     // nedge are the number of edges we
     ne = 0;
-    for (i = 0; i < nedge; i++)
-    {
+    for (i = 0; i < nedge; i++) {
       // This is required to solve the case when two vertices are connected
       // between them but
       // disconnected from all the others
-      while ((n_ed[2 * i] > o_ed[2 * pnod]) && (pnod < nod))
-      {
+      while ((n_ed[2 * i] > o_ed[2 * pnod]) && (pnod < nod)) {
         ncouple++;
         pnod++;
       }
 
       if ((n_ed[2 * i] == o_ed[2 * pnod]) &&
-          (n_ed[2 * i + 1] == o_ed[2 * pnod + 1]))
-      {
+          (n_ed[2 * i + 1] == o_ed[2 * pnod + 1])) {
         pnod++;
         // skip this
         continue;
-      }
-      else
-      {
+      } else {
         // save this in the remaining edges
         r_ed[2 * ne] = n_ed[2 * i];
         r_ed[2 * ne + 1] = n_ed[2 * i + 1];
         ne++;
       }
     }
-  }
-  else
+  } else
     memcpy(r_ed, n_ed, 2 * ne * sizeof(r_ed));
 
   fprintf(stdout, "[rank %d] Edges removed during second step %lu\n", myid,
@@ -750,8 +690,7 @@ static LOCINT degree_reduction(int myid, int ntask, uint64_t **ed,
  *
  */
 
-static uint64_t norm_graph(uint64_t *ed, uint64_t ned, LOCINT *deg)
-{
+static uint64_t norm_graph(uint64_t *ed, uint64_t ned, LOCINT *deg) {
 
   uint64_t l, n;
 
@@ -763,17 +702,15 @@ static uint64_t norm_graph(uint64_t *ed, uint64_t ned, LOCINT *deg)
   // and self-loop and remove them from edge list
   if (deg != NULL)
     deg[GI2LOCI(ed[0])]++;
-  for (n = l = 1; n < ned; n++)
-  {
+  for (n = l = 1; n < ned; n++) {
 
     if (deg != NULL)
       deg[GI2LOCI(ed[0])]++;
     if (((ed[2 * n] !=
-          ed[2 * (n - 1)]) ||                       // Check if two consecutive heads are different
+          ed[2 * (n - 1)]) || // Check if two consecutive heads are different
          (ed[2 * n + 1] != ed[2 * (n - 1) + 1])) && // Check if two consecutive
                                                     // tails are different
-        (ed[2 * n] != ed[2 * n + 1]))
-    { // It is not a "cappio"
+        (ed[2 * n] != ed[2 * n + 1])) {             // It is not a "cappio"
 
       ed[2 * l] = ed[2 * n]; // since it is not a "cappio" and is not a
                              // duplicate edge, copy it in the final edge array
@@ -785,26 +722,24 @@ static uint64_t norm_graph(uint64_t *ed, uint64_t ned, LOCINT *deg)
 }
 
 // probably unneeded
-static int verify_32bit_fit(uint64_t *ed, uint64_t ned)
-{
+static int verify_32bit_fit(uint64_t *ed, uint64_t ned) {
 
   uint64_t i;
 
-  for (i = 0; i < ned; i++)
-  {
+  for (i = 0; i < ned; i++) {
     uint64_t v;
 
     v = GI2LOCI(ed[2 * i]);
-    if (v >> (sizeof(LOCINT) * 8))
-    {
-      fprintf(stdout, "[%d] %" PRIu64 "=GI2LOCI(%" PRIu64 ") won't fit in a 32-bit word\n",
+    if (v >> (sizeof(LOCINT) * 8)) {
+      fprintf(stdout, "[%d] %" PRIu64 "=GI2LOCI(%" PRIu64
+                      ") won't fit in a 32-bit word\n",
               myid, v, ed[2 * i]);
       return 0;
     }
     v = GJ2LOCJ(ed[2 * i + 1]);
-    if (v >> (sizeof(LOCINT) * 8))
-    {
-      fprintf(stdout, "[%d] %" PRIu64 "=GJ2LOCJ(%" PRIu64 ") won't fit in a 32-bit word\n",
+    if (v >> (sizeof(LOCINT) * 8)) {
+      fprintf(stdout, "[%d] %" PRIu64 "=GJ2LOCJ(%" PRIu64
+                      ") won't fit in a 32-bit word\n",
               myid, v, ed[2 * i + 1]);
       return 0;
     }
@@ -813,12 +748,10 @@ static int verify_32bit_fit(uint64_t *ed, uint64_t ned)
 }
 
 static void init_lcc_1degree(uint64_t *edrem, uint64_t nedrem, uint64_t nverts,
-                             LOCINT *reach)
-{
+                             LOCINT *reach) {
   uint64_t i;
   LOCINT ur = 0;
-  for (i = 0; i < nedrem; i++)
-  {
+  for (i = 0; i < nedrem; i++) {
     // Edrem are edges (u,v) where v is a 1-degree vertex removed
     ur = GI2LOCI(edrem[2 * i]); // this is local row
     // We need to use the number of vertices in the connected component
@@ -831,8 +764,7 @@ static void init_lcc_1degree(uint64_t *edrem, uint64_t nedrem, uint64_t nverts,
  *
  */
 
-static void build_csc(uint64_t *ed, uint64_t ned, LOCINT **col, LOCINT **row)
-{
+static void build_csc(uint64_t *ed, uint64_t ned, LOCINT **col, LOCINT **row) {
 
   LOCINT *r, *c, *tmp, i;
 
@@ -849,8 +781,7 @@ static void build_csc(uint64_t *ed, uint64_t ned, LOCINT **col, LOCINT **row)
   /* fill csc row[] vector */
   memcpy(tmp, c, col_bl * sizeof(*c)); /* no need to copy last int (nnz) */
   r = (LOCINT *)Malloc(ned * sizeof(*r));
-  for (i = 0; i < ned; i++)
-  {
+  for (i = 0; i < ned; i++) {
     r[tmp[GJ2LOCJ(ed[2 * i + 1])]] = GI2LOCI(ed[2 * i]);
     tmp[GJ2LOCJ(ed[2 * i + 1])]++;
   }
@@ -863,8 +794,7 @@ static void build_csc(uint64_t *ed, uint64_t ned, LOCINT **col, LOCINT **row)
 /*
  * Compare unsigned local values
  */
-static int cmpuloc(const void *p1, const void *p2)
-{
+static int cmpuloc(const void *p1, const void *p2) {
 
   LOCINT l1 = *(LOCINT *)p1;
   LOCINT l2 = *(LOCINT *)p2;
@@ -879,8 +809,7 @@ static int cmpuloc(const void *p1, const void *p2)
  *
  *
  */
-uint64_t compact(uint64_t *v, uint64_t ld, int *vnum, int n)
-{
+uint64_t compact(uint64_t *v, uint64_t ld, int *vnum, int n) {
 
   int i, j;
   uint64_t cnt = vnum[0];
@@ -893,16 +822,14 @@ uint64_t compact(uint64_t *v, uint64_t ld, int *vnum, int n)
 static inline void exchange_vert4x2(LOCINT *frt, LOCINT *frt_sig, int nfrt,
                                     LOCINT *rbuf, LOCINT ld, int *rnum,
                                     MPI_Request *request, MPI_Status *status,
-                                    int post)
-{
+                                    int post) {
   int i, p;
   ld = ld * 2;
 
   // Receive vertices from the processors in the same column except myself
   // There are R processors in the same column
   // Here I receive the frontiers from all other processors in the same column
-  for (i = 1; i < R; i++)
-  {
+  for (i = 1; i < R; i++) {
     p = (myrow + i) % R;
     MPI_Irecv(rbuf + p * ld, ld, LOCINT_MPI, pmesh[p][mycol],
               VTAG(pmesh[p][mycol]), MPI_COMM_CLUSTER, request + i - 1);
@@ -916,16 +843,14 @@ static inline void exchange_vert4x2(LOCINT *frt, LOCINT *frt_sig, int nfrt,
   rnum[myrow] = nfrt;
   // Send the frontier to all processors in the same Column.
   // Here we send all vertices in the froniter to all processors on the column
-  for (i = 1; i < R; i++)
-  {
+  for (i = 1; i < R; i++) {
     p = (myrow + i) % R;
     MPI_Send(rbuf + myrow * ld, 2 * nfrt, LOCINT_MPI, pmesh[p][mycol],
              VTAG(myid), MPI_COMM_CLUSTER);
   }
   // Wait for IRecv to complete
   MPI_Waitall(R - 1, request, status);
-  for (i = 1; i < R; i++)
-  {
+  for (i = 1; i < R; i++) {
     // Get how many vertices have been received from each processor and store
     // the value in rnum[]
     p = (myrow + i) % R;
@@ -941,16 +866,14 @@ static inline void exchange_vert4x2(LOCINT *frt, LOCINT *frt_sig, int nfrt,
 static inline void exchange_horiz4x2(LOCINT *sbuf, LOCINT sld, int *snum,
                                      LOCINT *rbuf, LOCINT rld, int *rnum,
                                      MPI_Request *request, MPI_Status *status,
-                                     int post)
-{
+                                     int post) {
   int i, p;
 
   rld = rld * 2;
   sld = sld * 2;
 
   // Post the IRecv for all processes in the same row
-  for (i = 1; i < C; i++)
-  {
+  for (i = 1; i < C; i++) {
     p = (mycol + i) % C;
     MPI_Irecv(rbuf + p * rld, rld, LOCINT_MPI, pmesh[myrow][p],
               HTAG(pmesh[myrow][p]), MPI_COMM_CLUSTER, request + i - 1);
@@ -958,16 +881,14 @@ static inline void exchange_horiz4x2(LOCINT *sbuf, LOCINT sld, int *snum,
 
   rnum[mycol] = 0;
 
-  for (i = 1; i < C; i++)
-  {
+  for (i = 1; i < C; i++) {
     // Send data to other processes
     p = (mycol + i) % C;
     MPI_Send(sbuf + p * sld, snum[p] * 2, LOCINT_MPI, pmesh[myrow][p],
              HTAG(myid), MPI_COMM_CLUSTER);
   }
   MPI_Waitall(C - 1, request, status);
-  for (i = 1; i < C; i++)
-  {
+  for (i = 1; i < C; i++) {
     // Get the real number of data sent
     MPI_Get_count(status + i - 1, LOCINT_MPI, rnum + (mycol + i) % C);
     if (rnum[(mycol + i) % C] > 0)
@@ -977,8 +898,7 @@ static inline void exchange_horiz4x2(LOCINT *sbuf, LOCINT sld, int *snum,
   return;
 }
 
-static void dump_deg(LOCINT *deg, LOCINT *deg_count, int n)
-{
+static void dump_deg(LOCINT *deg, LOCINT *deg_count, int n) {
 
   FILE *fp = NULL;
   char name[MAX_LINE];
@@ -996,8 +916,7 @@ static void dump_deg(LOCINT *deg, LOCINT *deg_count, int n)
   return;
 }
 
-static void dump_array(const char *name, LOCINT *arr, int n)
-{
+static void dump_array(const char *name, LOCINT *arr, int n) {
 
   FILE *fp = NULL;
   char fname[MAX_LINE];
@@ -1016,8 +935,7 @@ static void dump_array(const char *name, LOCINT *arr, int n)
   return;
 }
 
-static void analyze_deg(LOCINT *deg, int n)
-{
+static void analyze_deg(LOCINT *deg, int n) {
 
   int i, curr_index = 0, new_count;
   char fname[256];
@@ -1030,14 +948,10 @@ static void analyze_deg(LOCINT *deg, int n)
 
   deg_count[curr_index] = 1;
 
-  for (i = 1; i < n; i++)
-  {
-    if (deg_unique[i] == deg_unique[curr_index])
-    {
+  for (i = 1; i < n; i++) {
+    if (deg_unique[i] == deg_unique[curr_index]) {
       deg_count[curr_index]++;
-    }
-    else
-    {
+    } else {
       curr_index++;
       deg_unique[curr_index] = deg_unique[i];
       deg_count[curr_index] = 1;
@@ -1046,7 +960,7 @@ static void analyze_deg(LOCINT *deg, int n)
   new_count = curr_index + 1;
 
   int bin_count = 16;
-  LOCINT bin_limits[16] = {0, 1, 2, 3, 4, 5, 6, 7,
+  LOCINT bin_limits[16] = {0, 1, 2,  3,   4,    5,     6,      7,
                            8, 9, 10, 100, 1000, 10000, 100000, 10000000};
   // int bin_count = sizeof(bin_limits);
 
@@ -1058,15 +972,11 @@ static void analyze_deg(LOCINT *deg, int n)
   i = new_count - 1;
   int curr_bin = (bin_count - 1);
 
-  while (i > -1)
-  {
-    if (deg_unique[i] >= bin_limits[curr_bin])
-    {
+  while (i > -1) {
+    if (deg_unique[i] >= bin_limits[curr_bin]) {
       bins[curr_bin] += deg_count[i];
       i--;
-    }
-    else
-    {
+    } else {
       curr_bin--;
       if (curr_bin < 0)
         break;
@@ -1082,8 +992,7 @@ static void analyze_deg(LOCINT *deg, int n)
   freeMem(deg_count);
 }
 
-enum
-{
+enum {
   s_minimum,
   s_firstquartile,
   s_median,
@@ -1094,8 +1003,7 @@ enum
   s_LAST
 };
 
-static int compare_doubles(const void *a, const void *b)
-{
+static int compare_doubles(const void *a, const void *b) {
 
   double aa = *((const double *)a);
   double bb = *((const double *)b);
@@ -1103,19 +1011,7 @@ static int compare_doubles(const void *a, const void *b)
   return (aa < bb) ? -1 : (aa == bb) ? 0 : 1;
 }
 
-static int cmp_key_deg(const void *p1, const void *p2) {
-  LOCINT *l1 = (LOCINT *)p1;
-  LOCINT *l2 = (LOCINT *)p2;
-  if (l1[2] > l2[2])
-  return -1;
-  if (l1[2] < l2[2])
-    return 1;
-
-  return 0;
-}
-
-static void get_statistics(const double x[], int n, double r[s_LAST])
-{
+static void get_statistics(const double x[], int n, double r[s_LAST]) {
 
   double temp;
   int i;
@@ -1151,8 +1047,7 @@ static void get_statistics(const double x[], int n, double r[s_LAST])
   free(xx);
 }
 
-static void print_stats(double *teps, int n)
-{
+static void print_stats(double *teps, int n) {
 
   int i;
   double stats[s_LAST];
@@ -1173,8 +1068,7 @@ static void print_stats(double *teps, int n)
   return;
 }
 
-void usage(const char *pname)
-{
+void usage(const char *pname) {
 
   prexit("Usage:\n"
          "\t %1$s -p RxC [-d dev0,dev1,...] [-o outfile] [-D] [-d] [-m] [-N <# "
@@ -1191,366 +1085,192 @@ void usage(const char *pname)
   return;
 }
 
-void init_rand(int mode)
-{
-  uint64_t seed = DEFAULT_SEED;
-  if (mode == 1)
-  {
-    struct timeval time;
-    gettimeofday(&time, NULL);
-    seed = getpid() + time.tv_sec + time.tv_usec;
-  }
-  srand48(seed);
+
+LOCINT bin_search(LOCINT *arr, int l, int r, LOCINT x){
+	while (l <= r) {
+		int m = l + (r - l) / 2;
+		if (arr[m] == x) return 1;
+		if (arr[m] < x) l = m + 1;
+		else r = m - 1;
+	}
+        return 0;
 }
 
-LOCINT bin_search(LOCINT *arr, int l, int r, LOCINT x)
-{
-  while (l <= r)
-  {
-    int m = l + (r - l) / 2;
-    if (arr[m] == x)
-      return 1;
-    if (arr[m] < x)
-      l = m + 1;
-    else
-      r = m - 1;
-  }
-  return 0;
-}
 
 #ifdef HAVE_SIMD
-void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output, int nthreads)
-{
-  LOCINT i = 0;
-  int dest_get;
-  LOCINT jj = 0;
-  LOCINT vv = 0;
-  LOCINT vvv = 0;
-  LOCINT counter = 0;
-  LOCINT gvid = 0;
-  LOCINT r_off[2] = {0, 0};
-  LOCINT row_offset, off_start = 0;
-  LOCINT r_offset;
-  float lcc = 0;
-  // Variable for SIMD
-  LOCINT c = 0;
-  static LOCINT local_counter = 0;
-  static int tid;
-  LOCINT reduction[nthreads];
+void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
+   LOCINT i = 0;
+   int dest_get;
+   LOCINT jj = 0;
+   LOCINT vv = 0;
+   LOCINT vvv = 0;
+   LOCINT counter = 0;
+   LOCINT gvid = 0;
+   LOCINT r_off[2] = {0, 0};
+   LOCINT row_offset, off_start = 0;
+   float lcc = 0;
+// Variable for SIMD 
+   LOCINT c = 0;
+   static LOCINT local_counter = 0;
+   static int tid;
+   LOCINT reduction[32];
 
-  LOCINT col_miss = 0;
-  LOCINT row_miss = 0;
-  cl_stats_full *col_stats = NULL;
-  cl_stats_full *row_stats = NULL;
-  row_stats = malloc(sizeof(cl_stats_full));
-  col_stats = malloc(sizeof(cl_stats_full));
 
 #ifdef HAVE_CLAMPI
-  CMPI_Win win_col;
-  CMPI_Win win_row;
-
-  setenv("CL_MEM_SIZE", COL_MEM_SIZE, 1);
-  setenv("CL_HT_ENTRIES", COL_HT_ENTRIES, 1);
-  CMPI_Win_create(col, col_bl * sizeof(LOCINT), sizeof(LOCINT), MPI_INFO_NULL,
-                  Row_comm, &win_col);
-#ifdef HAVE_LIBLSB
-  LSB_Set_Rparam_string("COL_MEM_SIZE", COL_MEM_SIZE);
-  LSB_Set_Rparam_string("COL_HT_ENTRIES", COL_HT_ENTRIES);
-#endif
-  setenv("CL_MEM_SIZE", ROW_MEM_SIZE, 1);
-  setenv("CL_HT_ENTRIES", ROW_HT_ENTRIES, 1);
-  CMPI_Win_create(row, col[col_bl] * sizeof(LOCINT), sizeof(LOCINT),
-                  MPI_INFO_NULL, Row_comm, &win_row);
-#ifdef HAVE_LIBLSB
-  LSB_Set_Rparam_string("ROW_MEM_SIZE", ROW_MEM_SIZE);
-  LSB_Set_Rparam_string("ROW_HT_ENTRIES", ROW_HT_ENTRIES);
-#endif
-  MMPI_WIN_LOCK_ALL(0, win_col.win);
-  MMPI_WIN_LOCK_ALL(0, win_row.win);
+   CMPI_Win win_col;
+   CMPI_Win win_row;
+   CMPI_Win_create(col, col_bl * sizeof(LOCINT), sizeof(LOCINT), MPI_INFO_NULL,
+                    Row_comm, &win_col);
+   CMPI_Win_create(row, col[col_bl] * sizeof(LOCINT), sizeof(LOCINT),
+                    MPI_INFO_NULL, Row_comm, &win_row);
+   MMPI_WIN_LOCK_ALL(0, win_col.win);
+   MMPI_WIN_LOCK_ALL(0, win_row.win);
 #else
-  MMPI_WIN win_col;
-  MMPI_WIN win_row;
-  MMPI_WIN_CREATE(col, col_bl * sizeof(LOCINT), sizeof(LOCINT), MPI_INFO_NULL,
-                  Row_comm, &win_col);
-  MMPI_WIN_CREATE(row, col[col_bl] * sizeof(LOCINT), sizeof(LOCINT),
-                  MPI_INFO_NULL, Row_comm, &win_row);
-  MMPI_WIN_LOCK_ALL(0, win_col);
-  MMPI_WIN_LOCK_ALL(0, win_row);
+   MMPI_WIN win_col;
+   MMPI_WIN win_row;
+   MMPI_WIN_CREATE(col, col_bl * sizeof(LOCINT), sizeof(LOCINT), MPI_INFO_NULL,
+                    Row_comm, &win_col);
+   MMPI_WIN_CREATE(row, col[col_bl] * sizeof(LOCINT), sizeof(LOCINT),
+                    MPI_INFO_NULL, Row_comm, &win_row);
+   MMPI_WIN_LOCK_ALL(0, win_col);
+   MMPI_WIN_LOCK_ALL(0, win_row);
 #endif
 
-  LOCINT *adj_v = (LOCINT *)Malloc(row_pp * sizeof(LOCINT));
-  LOCINT *adj_local = (LOCINT *)Malloc(row_pp * sizeof(LOCINT));
+   LOCINT *adj_v = (LOCINT *)Malloc(row_pp * sizeof(LOCINT));
+   LOCINT *adj_local = (LOCINT *)Malloc(row_pp * sizeof(LOCINT));
 
-#ifdef RANDOM_REORDER
-  LOCINT *reorder = (LOCINT *)Malloc(row_pp * sizeof(LOCINT));
-#elif DEGBSD_REORDER
-  LOCINT *reorder = (LOCINT *)Malloc(3 * row_pp * sizeof(LOCINT));
-#endif
-  LOCINT nget = 0;
-  LOCINT nlocal = 0;
-  LOCINT zerouno = 0;
+   LOCINT nget = 0;
+   LOCINT nlocal = 0;
+   LOCINT zerouno = 0;
 #ifdef HAVE_LIBLSB
-  LSB_Set_Rparam_int("rank", gmyid);
-  LSB_Set_Rparam_int("csize", gntask);
+   LSB_Set_Rparam_int("rank", gmyid);
+   LSB_Set_Rparam_int("csize", gntask);
 
 #ifdef HAVE_CLAMPI
-  LSB_Set_Rparam_string("type", "CLAMPI");
+   LSB_Set_Rparam_string("type", "CLAMPI");
 #else
-  LSB_Set_Rparam_string("type", "MPI");
+   LSB_Set_Rparam_string("type", "MPI");
 #endif
 
 #endif
 
-  int gres;
-  int it;
+   int gres;
+   int it;
 
-  for (it = 0; it < RUNS + WARMUP; it++)
-  {
-
+   for (it = 0; it < RUNS + WARMUP; it++) {
+#ifdef HAVE_LIBLSB
+       LSB_Res();
+#endif
 
 #pragma omp threadprivate(local_counter, tid)
 #pragma omp parallel
-    tid = omp_get_thread_num();
+       tid = omp_get_thread_num();
+       for (i = 0; i < col_bl; i++) {
+           row_offset = col[i + 1] - col[i];
+	   if (row_offset == 1) continue; // here you can compute degree like deg[i] = row_offset
+           memcpy(adj_local, &row[col[i]], row_offset * sizeof(LOCINT));
+           counter = 0;
+#pragma omp parallel
+{
+           local_counter = 0;
+}
+// USE A CONSTANT HERE DEPENDS ON HOW MANY COREs YOU ARE USING 
+           for (c = 0; c < 32; c++) reduction[c] = 0;
+
+           for (jj = 0; jj < row_offset; jj++) {
+               gvid = LOCI2GI(row[col[i] + jj]); // offset gvid in proc dest_get is gvid % C
+               dest_get = VERT2PROC(gvid);
+               off_start = gvid % col_bl;
+               if (dest_get != myid) {
+#ifdef HAVE_CLAMPI
+                   gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col);
+                   if (gres != CL_HIT) CMPI_Win_flush(dest_get, win_col);
+#else
+                   MMPI_GET(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col);
+                   MMPI_WIN_FLUSH(dest_get, win_col);
+#endif
+
+#ifdef HAVE_CLAMPI
+                   gres =
+                      CMPI_Get(adj_v, r_off[1] - r_off[0], MPI_UINT32_T, dest_get,
+                          r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row);
+                   if (gres != CL_HIT) CMPI_Win_flush(dest_get, win_row);
+#else
+                   MMPI_GET(adj_v, r_off[1] - r_off[0], MPI_UINT32_T, dest_get,
+                     r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row);
+                   MMPI_WIN_FLUSH(dest_get, win_row);
+#endif
+                   nget++;
+               } 
+	       else {
+                  r_off[0] = col[off_start];
+                  r_off[1] = col[off_start + 1];
+                  memcpy(adj_v, &row[r_off[0]], (r_off[1] - r_off[0]) * sizeof(LOCINT));
+                  nlocal++;
+               }
+               // Compute LCC
+               int r_offset = r_off[1]-r_off[0];
+               if (r_offset < 32){
+	          for (vv = 0; vv < r_offset; vv++){
+		      if (adj_v[vv] == LOCI2GI(i)) continue;
+		      if (bin_search(adj_local,0, row_offset-1, adj_v[vv]))
+		      {
+			      counter +=1;
+		      }
+	          }
+               }
+               else{
+#pragma omp parallel for schedule(dynamic, 8) // Put a define here 
+	          for (vv = 0; vv < r_offset; vv++){
+		      if (adj_v[vv] == LOCI2GI(i)) continue;
+		      if (bin_search(adj_local,0, row_offset-1, adj_v[vv])) local_counter += 1;
+		      reduction[tid] = local_counter;
+	          }
+               }
+	   } //end jj loop
+           if (row_offset == 1 || row_offset == 0){
+		  lcc = 0;
+	   }  
+	   else{  // Put the define here   
+                  for (c = 0; c < 32; c++) counter += reduction[c];
+                  lcc = (float) counter/(float)(row_offset*(row_offset-1));
+	   }
+           output[i] = lcc;
 #ifdef HAVE_LIBLSB
-    LSB_Res();
+           if (it > WARMUP)
+           LSB_Rec(it);
 #endif
-    for (i = 0; i < col_bl; i++)
-    {
-      col_miss = 0;
-      row_miss = 0;
-      nget = 0;
-      row_offset = col[i + 1] - col[i];
-      if (row_offset == 1)
-        continue; // here you can compute degree like deg[i] = row_offset
-      memcpy(adj_local, &row[col[i]], row_offset * sizeof(LOCINT));
-      counter = 0;
-#pragma omp parallel
-      {
-        local_counter = 0;
-      }
-      // USE A CONSTANT HERE DEPENDS ON HOW MANY COREs YOU ARE USING
-      for (c = 0; c < nthreads; c++)
-        reduction[c] = 0;
-
-#ifdef RANDOM_REORDER
-        init_rand(0);
-        memcpy(reorder, &row[col[i]], row_offset * sizeof(LOCINT));
-        for (int re = row_offset - 1; re >=0; --re)
-        {
-          int rnd = rand() % (re + 1);
-          LOCINT tmp = reorder[re];
-          reorder[re] = reorder[rnd];
-          reorder[rnd] = tmp; 
-        }
-        
-#endif
-
-#ifdef DEGBSD_REORDER
-        for (jj = 0; jj < row_offset; jj++) {
-          gvid = LOCI2GI(adj_local[jj]);
-          dest_get = VERT2PROC(gvid);
-          off_start = GJ2LOCJ(gvid);
-          if (dest_get != myid)
-          {
-            gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2,
-                            MPI_UINT32_T, win_col);
-            if (gres != CL_HIT) {
-              CMPI_Win_flush(dest_get, win_col);
-              col_miss++;
-            }
-          }
-          else
-          {
-            r_off[0] = col[off_start];
-            r_off[1] = col[off_start + 1];
-          }
-
-          reorder[3 * jj] = adj_local[jj];
-          reorder[3 * jj+1] = r_off[0];
-          reorder[3 * jj+2] = r_off[1] - r_off[0];
-        }
-        qsort(reorder, row_offset, sizeof(LOCINT[3]), cmp_key_deg);
-#endif
-
-      for (jj = 0; jj < row_offset; jj++)
-      {
-#ifdef RANDOM_REORDER
-        gvid = LOCI2GI(reorder[jj]);
-#elif DEGBSD_REORDER
-        gvid = LOCI2GI(reorder[3 * jj]);
-#else
-        gvid = LOCI2GI(adj_local[jj]); // offset gvid in proc dest_get is gvid % C
-#endif
-
-        dest_get = VERT2PROC(gvid);
-        off_start = GJ2LOCJ(gvid);
-
-#ifdef DEGBSD_REORDER
-        r_off[0] = reorder[3 * jj + 1];
-        r_off[1] = reorder[3 * jj + 2] + r_off[0];
-#endif
-
-        if (dest_get != myid)
-        {
-#ifndef DEGBSD_REORDER
+       }// end col_block loop
 #ifdef HAVE_CLAMPI
-          gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col);
-          if (gres != CL_HIT) {
-            col_miss++;
-            CMPI_Win_flush(dest_get, win_col);
-          }
-#else
-          MMPI_GET(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col);
-          MMPI_WIN_FLUSH(dest_get, win_col);
+       CMPI_Win_invalidate(win_col);
+       CMPI_Win_invalidate(win_row);
 #endif
-#endif
+   } // End WARM-UP + RUN loop 
 
 #ifdef HAVE_CLAMPI
-          gres =
-              CMPI_Get(adj_v, r_off[1] - r_off[0], MPI_UINT32_T, dest_get,
-                       r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row);
-          if (gres != CL_HIT) {
-            CMPI_Win_flush(dest_get, win_row);
-            row_miss++;
-          }
+   MMPI_WIN_UNLOCK_ALL(win_col.win);
+   MMPI_WIN_UNLOCK_ALL(win_row.win);
+   CMPI_Win_invalidate(win_col);
+   CMPI_Win_invalidate(win_row);
+   CMPI_Win_free(&win_col);
+   CMPI_Win_free(&win_row);
 #else
-          MMPI_GET(adj_v, r_off[1] - r_off[0], MPI_UINT32_T, dest_get,
-                   r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row);
-          MMPI_WIN_FLUSH(dest_get, win_row);
+   MMPI_WIN_UNLOCK_ALL(win_col);
+   MMPI_WIN_UNLOCK_ALL(win_row);
+   MMPI_WIN_FREE(&win_col);
+   MMPI_WIN_FREE(&win_row);
 #endif
-          nget++;
-        }
-        else
-        {
-#ifndef DEGBSD_REORDER
-          r_off[0] = col[off_start];
-          r_off[1] = col[off_start + 1];
-#endif
-          memcpy(adj_v, &row[r_off[0]], (r_off[1] - r_off[0]) * sizeof(LOCINT));
-          nlocal++;
-        }
-        r_offset = r_off[1] - r_off[0];
-        // printf("roffset: %u\n", r_offset);
-        //  Compute LCC
-        // LOCINT len_keys, len_tree;
-        // LOCINT *tree, *keys;
-        // LOCINT curr;
-        // if(r_offset < row_offset) {
-        //   len_tree = row_offset;
-        //   len_keys = r_offset;
-        //   tree = adj_local;
-        //   keys = adj_v;
-        //   curr = LOCI2GI(i);
-        // }
-        // else
-        // {
-        //   len_tree = r_offset;
-        //   len_keys = row_offset;
-        //   tree = adj_v;
-        //   keys = adj_local;
-        //   curr = gvid;
-        // }
-
-#pragma omp parallel
-{
-                  int j = 0;
-                  #pragma omp for schedule(static)
-                  for(vv = 0; vv < len_tree; vv++) {
-                    while(j < len_keys && keys[j] < tree[vv]){
-                      j++;
-                    }
-                    if(tree[vv] == keys[j]) {
-                      local_counter += 1;
-                      j++;
-                    }
-                  }
-                    reduction[tid] = local_counter;
+   freeMem(adj_v);
+   freeMem(adj_local);
 }
+#endif //END HAVE_SIMD 
 
-        if (len_keys < 64)
-        {
-          for (vv = 0; vv < len_keys; vv++)
-          {
-            if (keys[vv] == curr)
-              continue;
-            if (bin_search(tree, 0, len_tree - 1, keys[vv]))
-            {
-              counter += 1;
-            }
-          }
-        }
-        else
-        {
-_Pragma(OMP_SCHEDULING) // Put a define here
-          for (vv = 0; vv < len_keys; vv++)
-          {
-            if (keys[vv] == curr)
-              continue;
-            if (bin_search(tree, 0, len_tree - 1, keys[vv]))
-              local_counter += 1;
-            reduction[tid] = local_counter;
-          }
-        }
 
-      } //end jj loop
-      if (row_offset == 1 || row_offset == 0)
-      {
-        lcc = 0;
-      }
-      else
-      { // Put the define here
-        for (c = 0; c < nthreads; c++)
-          counter += reduction[c];
-          lcc = (float)counter / (float)(row_offset * (row_offset - 1));
-      }
-      output[i] = lcc;
-      #ifdef HAVE_LIBLSB
-//       // if (it > WARMUP)
-        cl_get_stats(win_col, col_stats);
-        cl_get_stats(win_row, row_stats);
-        LSB_Set_Rparam_int("i", i);
-        LSB_Set_Rparam_int("COL_MISS", col_miss);
-        LSB_Set_Rparam_int("COL_HT_MISS", col_stats->base.ht_evictions);
-        LSB_Set_Rparam_int("COL_SP_MISS", col_stats->base.sp_evictions);
-        LSB_Set_Rparam_int("NGET", nget);
-        LSB_Rec(it);
-#endif
-    } // end col_block loop
-#ifdef HAVE_CLAMPI
-    CMPI_Win_invalidate(win_col);
-    CMPI_Win_invalidate(win_row);
-#endif
-  } // End WARM-UP + RUN loop
 
-#ifdef HAVE_CLAMPI
-  MMPI_WIN_UNLOCK_ALL(win_col.win);
-  MMPI_WIN_UNLOCK_ALL(win_row.win);
-  CMPI_Win_invalidate(win_col);
-  CMPI_Win_invalidate(win_row);
-  CMPI_Win_free(&win_col);
-  CMPI_Win_free(&win_row);
-#else
-  MMPI_WIN_UNLOCK_ALL(win_col);
-  MMPI_WIN_UNLOCK_ALL(win_row);
-  MMPI_WIN_FREE(&win_col);
-  MMPI_WIN_FREE(&win_row);
-#endif
-#ifdef RANDOM_REORDER || DEGBSD_REORDER
-  freeMem(reorder);
-#endif
-  freeMem(adj_v);
-  freeMem(adj_local);
 
-  free(row_stats);
-  free(col_stats);
-}
-#endif //END HAVE_SIMD
-
-void lcc_func(LOCINT *col, LOCINT *row, float *output)
-{
+void lcc_func(LOCINT *col, LOCINT *row, float *output) {
   LOCINT i = 0;
-  if (R == 1)
-  {
+  if (R == 1) {
     int dest_get;
     LOCINT jj = 0;
     LOCINT vv = 0;
@@ -1602,25 +1322,21 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output)
     int gres;
     int it;
 
-    for (it = 0; it < RUNS + WARMUP; it++)
-    {
+    for (it = 0; it < RUNS + WARMUP; it++){
 #ifdef HAVE_LIBLSB
       LSB_Res();
 #endif
-      for (i = 0; i < col_bl; i++)
-      {
+      for (i = 0; i < col_bl; i++) {
 
         row_offset = col[i + 1] - col[i];
         memcpy(adj_local, &row[col[i]], row_offset * sizeof(LOCINT));
         counter = 0;
-        for (jj = 0; jj < row_offset; jj++)
-        {
+        for (jj = 0; jj < row_offset; jj++) {
           gvid = LOCI2GI(row[col[i] + jj]); // offset gvid in proc dest_get is gvid % C
           dest_get = VERT2PROC(gvid);
           off_start = gvid % col_bl;
           // continue;
-          if (dest_get != myid)
-          {
+          if (dest_get != myid) {
 #ifdef HAVE_CLAMPI
             gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2,
                             MPI_UINT32_T, win_col);
@@ -1645,9 +1361,7 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output)
 #endif
 
             nget++;
-          }
-          else
-          {
+          } else {
             r_off[0] = col[off_start];
             r_off[1] = col[off_start + 1];
             memcpy(adj_v, &row[r_off[0]],
@@ -1655,26 +1369,20 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output)
             nlocal++;
           }
           // Compute LCC
-          for (vv = 0; vv < r_off[1] - r_off[0]; vv++)
-          {
+          for (vv = 0; vv < r_off[1] - r_off[0]; vv++) {
             if (adj_v[vv] == LOCI2GI(i))
               continue;
-            for (vvv = 0; vvv < row_offset; vvv++)
-            {
-              if (adj_v[vv] == adj_local[vvv])
-              {
+            for (vvv = 0; vvv < row_offset; vvv++) {
+              if (adj_v[vv] == adj_local[vvv]) {
                 counter += 1;
               }
             }
           }
         }
-        if (row_offset == 1 || row_offset == 0)
-        {
+        if (row_offset == 1 || row_offset == 0) {
           lcc = 0;
           zerouno++;
-        }
-        else
-        {
+        } else {
           lcc = (float)counter / (float)(row_offset * (row_offset - 1));
         }
 
@@ -1717,30 +1425,35 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output)
   }
 }
 
+void init_rand(int mode) {
+  uint64_t seed = DEFAULT_SEED;
+  if (mode == 1) {
+    struct timeval time;
+    gettimeofday(&time, NULL);
+    seed = getpid() + time.tv_sec + time.tv_usec;
+  }
+  srand48(seed);
+}
 
-LOCINT uniform_int(LOCINT max, LOCINT min)
-{
+LOCINT uniform_int(LOCINT max, LOCINT min) {
   LOCINT temp = lrand48() % (max - min + 1) + min;
   MPI_Bcast(&temp, 1, MPI_INT, myid, MPI_COMM_CLUSTER);
   return temp;
 }
 
-double uniform_double(double max, double min)
-{
+double uniform_double(double max, double min) {
   double temp = (double)rand() / RAND_MAX;
   temp = min + temp * (max - min + 1);
   return temp;
 }
 
-double uniform01()
-{
+double uniform01() {
   double temp = (double)lrand48() / (double)RAND_MAX;
   MPI_Bcast(&temp, 1, MPI_DOUBLE, myid, MPI_COMM_CLUSTER);
   return temp;
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
 
   int s, t, gread = -1;
   int scale = 21, edgef = 16;
@@ -1801,8 +1514,7 @@ int main(int argc, char *argv[])
   MPI_Comm_rank(MPI_COMM_WORLD, &gmyid);
   MPI_Comm_size(MPI_COMM_WORLD, &gntask);
 
-  if (argc == 1)
-  {
+  if (argc == 1) {
     usage(argv[0]);
     exit(EXIT_FAILURE);
   }
@@ -1814,8 +1526,7 @@ int main(int argc, char *argv[])
     exit(EXIT_FAILURE);
   limit -= wr;
   pl += wr;
-  for (i = 0; i < argc; i++)
-  {
+  for (i = 0; i < argc; i++) {
     wr = snprintf(cmdLine + pl, limit, " %s", argv[i]);
     if (wr < 0)
       exit(EXIT_FAILURE);
@@ -1824,22 +1535,19 @@ int main(int argc, char *argv[])
   }
   snprintf(cmdLine + pl, limit, "\n");
 
-  if (gmyid == 0)
-  {
+  if (gmyid == 0) {
     fprintf(stdout, "%s\n", cmdLine);
   }
 
-  while ((c = getopt(argc, argv, "o:p:ahD:dUf:n:r:S:E:N:H:")) != EOF)
-  {
-#define CHECKRTYPE(exitval, opt)               \
-  {                                            \
-    if (exitval == gread)                      \
-      prexit("Unexpected option -%c!\n", opt); \
-    else                                       \
-      gread = !exitval;                        \
+  while ((c = getopt(argc, argv, "o:p:ahD:dUf:n:r:S:E:N:H:")) != EOF) {
+#define CHECKRTYPE(exitval, opt)                                               \
+  {                                                                            \
+    if (exitval == gread)                                                      \
+      prexit("Unexpected option -%c!\n", opt);                                 \
+    else                                                                       \
+      gread = !exitval;                                                        \
   }
-    switch (c)
-    {
+    switch (c) {
     // BC approx  c param is the costanst used in Bader stopping cretierion
     case 'H':
       if (0 == sscanf(optarg, "%d", &heuristic))
@@ -1914,8 +1622,7 @@ int main(int argc, char *argv[])
   }
   if (approx_nverts > N)
     prexit("Number of vertices required is lager than N\n");
-  if (gread)
-  {
+  if (gread) {
     if (!gfile || !N)
       prexit("Graph file (-f) and number of vertices (-n)"
              " must be specified for file based bfs.\n");
@@ -1930,23 +1637,20 @@ int main(int argc, char *argv[])
 
   ntask = R * C;
   cntask = gntask / ntask;
-  if (gntask % ntask)
-  {
+  if (gntask % ntask) {
     fprintf(stderr, "Invalid configuration: total number of task is %d, "
                     "cluster size is %d\n",
             gntask, ntask);
     MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
   }
 
-  if (heuristic >= 2)
-  {
+  if (heuristic >= 2) {
     prexit("\n\nH2 and H3 are not implemented(-H): %d\n", heuristic);
     MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
   }
 
 #ifndef _LARGE_LVERTS_NUM
-  if ((N / R) > UINT32_MAX)
-  {
+  if ((N / R) > UINT32_MAX) {
     prexit("Number of vertics per processor too big (%" LOCPRI "), please"
            "define _LARGE_LVERTS_NUM macro in %s.\n",
            (N / R), __FILE__);
@@ -1967,8 +1671,7 @@ int main(int argc, char *argv[])
   col_bl = N / C;       /* adjacency matrix columns per block: N/C */
   row_pp = N / R;       /* adjacency matrix rows per proc:     N/(RC)*C = N/R */
 
-  if ((gmyid == 0) && (debug == 1))
-  {
+  if ((gmyid == 0) && (debug == 1)) {
     char fname[MAX_LINE];
     snprintf(fname, MAX_LINE, "%s_%d.log", "debug", gmyid);
     outdebug = Fopen(fname, "w");
@@ -1982,38 +1685,31 @@ int main(int argc, char *argv[])
   if (rootset > 0)
     random = 0;
 
-  if (gmyid == 0)
-  {
+  if (gmyid == 0) {
     fprintf(stdout, "\n\n****** DEVEL VERSION "
                     "******\n\n\n\n***************************\n\n");
     fprintf(stdout, "Total number of vertices (N): %" PRIu64 "\n", N);
     fprintf(stdout, "Processor mesh rows (R): %d\n", R);
     fprintf(stdout, "Processor mesh columns (C): %d\n", C);
-    if (gread)
-    {
+    if (gread) {
       fprintf(stdout, "Reading graph from file: %s\n", gfile);
-    }
-    else
-    {
+    } else {
       fprintf(stdout, "RMAT graph scale: %d\n", scale);
       fprintf(stdout, "RMAT graph edge factor: %d\n", edgef);
       fprintf(stdout, "Number of bc rounds: %ld\n", nbfs);
     }
     fprintf(stdout, "\n\n");
-    if (heuristic == 0)
-    {
+    if (heuristic == 0) {
       fprintf(stdout, "HEURISTICs: OFF: %d\n", heuristic);
-    }
-    else if (heuristic == 1)
-    {
+
+    } else if (heuristic == 1) {
       fprintf(stdout, "HEURISTICs: 1-degree reduction ON: %d\n", heuristic);
     }
 
     fprintf(stdout, "\n");
   }
 
-  if (NULL != ofile)
-  {
+  if (NULL != ofile) {
     fprintf(stdout, "Result written to file: %s\n", ofile);
     resname = (char *)malloc((sizeof(ofile) + MAX_LINE) * sizeof(*resname));
     sprintf(resname, "%s_%dX%d_%d.log", ofile, R, C, gmyid);
@@ -2038,22 +1734,19 @@ int main(int argc, char *argv[])
     fprintf(stdout, " done in %f secs\n", TIMER_ELAPSED(0) / 1.0E+6);
   prstat(ned, gread ? "Edges read from file:" : "Edges generated:", 1);
 
-  if (heuristic != 0)
-  {
+  if (heuristic != 0) {
     l = norm_graph(edge, ned, NULL);
     prstat(ned - l, "First Multi-edges removed:", 1);
     ned = l;
   }
 
-  if (dump > 0 && gread == 0 && ntask == 1)
-  {
+  if (dump > 0 && gread == 0 && ntask == 1) {
     fprintf(stdout, "Dump file...\n");
     dump_rmat(edge, ned, scale, edgef);
   }
 
   // 1 DEGREE PREPROCESSING TIMING ON
-  if (heuristic == 1)
-  {
+  if (heuristic == 1) {
     if (gmyid == 0)
       fprintf(stdout, "Degree reduction graph (%d)...\n", heuristic);
     TIMER_START(0);
@@ -2077,8 +1770,7 @@ int main(int argc, char *argv[])
   prstat(ned, "Edges assigned after partitioning:", 1);
 // dump_edges(edge, ned,"Edges 2-D");
 #ifndef _LARGE_LVERTS_NUM
-  if (ned > UINT32_MAX)
-  {
+  if (ned > UINT32_MAX) {
     fprintf(stderr, "Too many vertices assigned to me. Change LOCINT\n");
     exit(EXIT_FAILURE);
   }
@@ -2086,11 +1778,10 @@ int main(int argc, char *argv[])
   if (myid == 0)
     fprintf(stdout, "task %d: Verifying partitioning...", gmyid);
   TIMER_START(0);
-  for (n = 0; n < ned; n++)
-  {
-    if (EDGE2PROC(edge[2 * n], edge[2 * n + 1]) != myid)
-    {
-      fprintf(stdout, "[%d] error, received edge (%" PRIu64 ", %" PRIu64 "), should have been sent to %d\n",
+  for (n = 0; n < ned; n++) {
+    if (EDGE2PROC(edge[2 * n], edge[2 * n + 1]) != myid) {
+      fprintf(stdout, "[%d] error, received edge (%" PRIu64 ", %" PRIu64
+                      "), should have been sent to %d\n",
               myid, edge[2 * n], edge[2 * n + 1],
               EDGE2PROC(edge[2 * n], edge[2 * n + 1]));
       break;
@@ -2122,8 +1813,7 @@ int main(int argc, char *argv[])
   ned = l;
 
   // check whether uint64 edges can fit in 32bit CSC
-  if (4 == sizeof(LOCINT))
-  {
+  if (4 == sizeof(LOCINT)) {
     if (!verify_32bit_fit(edge, ned))
       MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
   }
@@ -2149,8 +1839,7 @@ int main(int argc, char *argv[])
 
   dist_lcc = (float *)Malloc(
       col_bl * sizeof(float)); // Local Cluster Coef... Store in scan mode
-  if (heuristic == 1)
-  {
+  if (heuristic == 1) {
     // if(myid==0) printf("task %d edges removed %d ...\n",gmyid,rem_ed);
     MPI_Allreduce(MPI_IN_PLACE, &rem_ed, 1, LOCINT_MPI, MPI_SUM,
                   MPI_COMM_CLUSTER);
@@ -2172,32 +1861,31 @@ int main(int argc, char *argv[])
   memset(mystats, 0, N * sizeof(STATDATA));
 #endif
 
-#ifdef SERIAL
 
-  if (myid == 0)
-    fprintf(stdout, "Computing LCC [SERIAL] using %d process on %d core per process\n", ntask, 1);
-  TIMER_START(0);
-  lcc_func(col, row, dist_lcc);
-  TIMER_STOP(0);
+
+#ifdef SERIAL
+ 
+if (myid == 0) fprintf(stdout, "Computing LCC [SERIAL] using %d process on %d core per process\n", ntask, 1);
+TIMER_START(0);
+lcc_func(col, row, dist_lcc);
+TIMER_STOP(0);
 
 #elif HAVE_SIMD
 #pragma omp parallel
-  {
-    nthreads = omp_get_num_threads();
-  }
-  if (myid == 0)
-    fprintf(stdout, "Computing LCC [BIN_SIMD] using %d process on %d core per process\n", ntask, nthreads);
-  TIMER_START(0);
-  lcc_func_bin_simd(col, row, dist_lcc, nthreads);
-  TIMER_STOP(0);
+{
+		nthreads = omp_get_num_threads();
+}
+if (myid == 0) fprintf(stdout, "Computing LCC [BIN_SIMD] using %d process on %d core per process\n", ntask, nthreads);
+TIMER_START(0);
+lcc_func_bin_simd(col, row, dist_lcc);
+TIMER_STOP(0);
 #endif
 
-  if (myid == 0)
-    fprintf(stdout, "LCC done in %f secs on %d rank\n", TIMER_ELAPSED(0) / 1.0E+6, myid);
+
+if (myid == 0) fprintf(stdout, "LCC done in %f secs on %d rank\n",TIMER_ELAPSED(0)/1.0E+6, myid);
 
   MPI_Barrier(MPI_COMM_WORLD);
-  if (gmyid == 0)
-  {
+  if (gmyid == 0) {
     fprintf(stdout, "System summary:\n Total(gntask) GPUs %d - Total(fd) ntask "
                     "%d - Total(fr)  cntask %d\n",
             gntask, ntask, cntask);
@@ -2208,13 +1896,11 @@ int main(int argc, char *argv[])
   fprintf(stdout,
           "WNODE Global-ID %d - Cluster-ID %d -  Local-ID %d ... closing\n",
           gmyid, color, myid);
-  if (mycol == 0 && resname != NULL)
-  {
+  if (mycol == 0 && resname != NULL) {
     FILE *resout = fopen(resname, "w");
 
     LOCINT k;
-    for (k = 0; k < col_bl; k++)
-    {
+    for (k = 0; k < row_pp; k++) {
       fprintf(resout, "%d\t%.2f\n", LOCI2GI(k), dist_lcc[k]);
     }
     fclose(resout);
@@ -2234,6 +1920,9 @@ int main(int argc, char *argv[])
   freeMem(hRnum);
   freeMem(hSFbuf);
   freeMem(hRFbuf);
+  // 2-degree
+
+  // ONEPREFIX
 
   MPI_Barrier(MPI_COMM_WORLD);
   MPI_Barrier(Row_comm);

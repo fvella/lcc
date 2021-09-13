@@ -313,7 +313,7 @@ static uint64_t read_graph(int myid, int ntask, const char *fpath,
     fgets(str, MAX_LINE, fp);
 
     // Strip # from the beginning of the line
-    if (strstr(str, "#") != NULL) {
+    if (strstr(str, "#") != NULL || strstr(str, "%") != NULL) {
       // fprintf(stdout, "\nreading line number %"PRIu64": %s\n", lcounter,
       // str);
       if (strstr(str, "Nodes:")) {
@@ -1193,6 +1193,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
   LOCINT *tree, *keys;
   LOCINT curr;
   LOCINT ratio;
+  LOCINT offset;
 
   LOCINT col_miss = 0;
   LOCINT row_miss = 0;
@@ -1336,17 +1337,18 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
       for (jj = 0; jj < row_offset; jj++) {
         // preparation for computation of current vertex
         // undirected version, jj offset to only intersect with the upper triangle
-        if (r_offset < (row_offset - jj)) {
-          len_tree = row_offset - jj;
+        offset = undirected * jj;
+        if (r_offset < (row_offset - offset)) {
+          len_tree = row_offset - offset;
           len_keys = r_offset;
-          tree = adj_local + jj;
+          tree = adj_local + offset;
           keys = adj_v;
           curr = LOCJ2GJ(i);
         } else {
           len_tree = r_offset;
-          len_keys = row_offset - jj;
+          len_keys = row_offset - offset;
           tree = adj_v;
-          keys = adj_local + jj;
+          keys = adj_local + offset;
           curr = gvid;
         }
 
@@ -1449,7 +1451,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
       } else {
         for (c = 0; c < nthreads; c++)
           counter += reduction[c];
-        lcc = (float)counter / (float)(row_offset * (row_offset - 1) / 2);  // / (float)(row_offset * (row_offset - 1));
+        lcc = (float)counter / (float)(row_offset * (row_offset - 1) / (1 + undirected));  // / (float)(row_offset * (row_offset - 1));
       }    
       
       output[i] += lcc;
@@ -1489,9 +1491,6 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
   MMPI_WIN_UNLOCK_ALL(win_row);
   MMPI_WIN_FREE(&win_col);
   MMPI_WIN_FREE(&win_row);
-#endif
-#if defined(RANDOM_REORDER) || defined(DEGBSD_REORDER)
-  freeMem(reorder);
 #endif
   freeMem(adj_v_remote_prim);
   freeMem(adj_v_remote_sec);

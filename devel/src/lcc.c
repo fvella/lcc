@@ -2142,7 +2142,7 @@ TIMER_STOP(0);
     cpuset_to_cstr(&coremask, clbuf);
     #pragma omp barrier
     fprintf(stdout, "Rank %d, using %d threads on %s: thread %d on core = %s.\n",
-     gmyid, nthreads, threadnum, hnbuf, clbuf);
+     gmyid, nthreads, hnbuf, threadnum, clbuf);
 }
 if (myid == 0) fprintf(stdout, "Computing LCC [BIN_SIMD] using %d process on %d core per process\n", ntask, nthreads);
 TIMER_START(0);

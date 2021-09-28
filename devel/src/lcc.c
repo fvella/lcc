@@ -1,3 +1,4 @@
+#define _GNU_SOURCE  
 #include "lcc.h"
 #include <dlfcn.h>
 #include <getopt.h>
@@ -19,8 +20,10 @@
 
 #include "config.h"
 
-#define RUNS 1
-#define WARMUP 0
+#include <sched.h>
+
+#define RUNS 3
+#define WARMUP 1
 #include "mpi_wrapper.h"
 
 #ifdef HAVE_LIBLSB
@@ -117,6 +120,35 @@ void *Malloc(size_t sz) {
   }
   memset(ptr, 0, sz);
   return ptr;
+}
+
+static char *cpuset_to_cstr(cpu_set_t *mask, char *str)
+{
+char *ptr = str;
+int i, j, entry_made = 0;
+for (i = 0; i < CPU_SETSIZE; i++) {
+if (CPU_ISSET(i, mask)) {
+int run = 0;
+entry_made = 1;
+for (j = i + 1; j < CPU_SETSIZE; j++) {
+if (CPU_ISSET(j, mask)) run++;
+else break;
+}
+if (!run)
+sprintf(ptr, "%d,", i);
+else if (run == 1) {
+sprintf(ptr, "%d,%d,", i, i + 1);
+i++;
+} else {
+sprintf(ptr, "%d-%d,", i, i + run);
+i += run;
+}
+while (*ptr != 0) ptr++;
+}
+}
+ptr -= entry_made;
+*ptr = 0;
+return(str);
 }
 
 // root node, degree, nvisited, num_lvl
@@ -434,6 +466,7 @@ static void dump_rmat(uint64_t *myedges, uint64_t myned, int scale, int edgef) {
             myedges[2 * i + 1]);
   }
   fclose(fout);
+  exit(EXIT_FAILURE);
 }
 
 /*
@@ -1713,6 +1746,13 @@ int main(int argc, char *argv[]) {
   char *gfile = NULL, *p = NULL, *ofile = NULL;
   int c;
 
+  int threadnum;
+  char clbuf[7 * CPU_SETSIZE], hnbuf[64];
+  memset(clbuf, 0, sizeof(clbuf));
+  memset(hnbuf, 0, sizeof(hnbuf));
+  (void)gethostname(hnbuf, sizeof(hnbuf));
+  cpu_set_t coremask;
+
   TIMER_DEF(0);
 
   int random = 0;
@@ -2094,9 +2134,15 @@ lcc_func(col, row, dist_lcc);
 TIMER_STOP(0);
 
 #elif HAVE_SIMD
-#pragma omp parallel
+#pragma omp parallel private(threadnum, coremask, clbuf)
 {
 		nthreads = omp_get_num_threads();
+    threadnum = omp_get_thread_num();
+    (void)sched_getaffinity(0, sizeof(coremask), &coremask);
+    cpuset_to_cstr(&coremask, clbuf);
+    #pragma omp barrier
+    fprintf(stdout, "Rank %d, using %d threads, thread %d, on %s core = %s.\n",
+     gmyid, nthreads, threadnum, hnbuf, clbuf);
 }
 if (myid == 0) fprintf(stdout, "Computing LCC [BIN_SIMD] using %d process on %d core per process\n", ntask, nthreads);
 TIMER_START(0);

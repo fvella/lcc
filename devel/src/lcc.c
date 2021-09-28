@@ -2141,7 +2141,7 @@ TIMER_STOP(0);
     (void)sched_getaffinity(0, sizeof(coremask), &coremask);
     cpuset_to_cstr(&coremask, clbuf);
     #pragma omp barrier
-    fprintf(stdout, "Rank %d, using %d threads, thread %d, on %s core = %s.\n",
+    fprintf(stdout, "Rank %d, using %d threads on %s: thread %d on core = %s.\n",
      gmyid, nthreads, threadnum, hnbuf, clbuf);
 }
 if (myid == 0) fprintf(stdout, "Computing LCC [BIN_SIMD] using %d process on %d core per process\n", ntask, nthreads);

@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <mpi.h>
 
+
+#define ARM_A64FX 1
+
 #define OVERLAP 1
 #define ONEPREFIX 1
 #define THRUST 1

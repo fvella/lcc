@@ -41,8 +41,8 @@
 #endif
 
 #ifdef ARM_A64FX
-double libpgt_g_hrtimer_startvalue = 0
-#endif
+double libpgt_g_hrtimer_startvalue = 0;
+#endif 
 
 #define VTAG(t) (0 * ntask + (t))
 #define HTAG(t) (100 * ntask + (t))

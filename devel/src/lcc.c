@@ -1206,6 +1206,10 @@ void set_clampi_params(LOCINT ht_size, LOCINT mem_size) {
   free(ht_str);
 }
 
+double own_score(double penalty, double lasthit, double val) {
+  return penalty * val;
+}
+
 #ifdef HAVE_SIMD
 void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
   LOCINT i = 0;
@@ -1218,7 +1222,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
   LOCINT r_off[2] = {0, 0};
   LOCINT row_offset, off_start = 0;
   LOCINT r_offset;
-   float lcc = 0;
+  float lcc = 0;
   // Variable for SIMD
   LOCINT c = 0;
   static LOCINT local_counter = 0;
@@ -1264,7 +1268,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 
 #ifdef HAVE_CLAMPI
   // configure clampi as in thesis
-  double mem_factor = 0.2;
+  double mem_factor = 0.25;
   double non_local_portion = (nglobal_ed - ned) / (double)nglobal_ed;
   LOCINT row_mem_size = mem_factor * nglobal_ed * sizeof(LOCINT);
   double memory_portion = mem_factor / non_local_portion;
@@ -1273,11 +1277,11 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 
   set_clampi_params(index_size, index_size / 2);
   CMPI_Win_create(col, col_bl * sizeof(LOCINT), sizeof(LOCINT), MPI_INFO_NULL,
-                  Row_comm, &win_col);
+                  Row_comm, &win_col, NULL);
 
   set_clampi_params(row_mem_size, row_ht_entries);
   CMPI_Win_create(row, col[col_bl] * sizeof(LOCINT), sizeof(LOCINT),
-                  MPI_INFO_NULL, Row_comm, &win_row);
+                  MPI_INFO_NULL, Row_comm, &win_row, &own_score);
 
   MMPI_WIN_LOCK_ALL(0, win_col.win);
   MMPI_WIN_LOCK_ALL(0, win_row.win);
@@ -1293,7 +1297,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 #ifdef HAVE_LIBLSB
 #ifdef HAVE_CLAMPI
   LSB_Set_Rparam_string("type", "CLAMPI");
-  LSB_Set_Rparam_string("order", REORDER);
+  LSB_Set_Rparam_string("order", "NO_REORDER");
   LSB_Set_Rparam_long("mem_size", row_mem_size);
   LSB_Set_Rparam_long("ht_entries", row_ht_entries);
 #else
@@ -1339,7 +1343,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
       // adjacency of the first neighbour
       if (dest_get != myid) {
 #ifdef HAVE_CLAMPI
-        gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col);
+        gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col, 0);
         if (gres != CL_HIT) {
           col_miss++;
           CMPI_Win_flush(dest_get, win_col);
@@ -1351,9 +1355,9 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 #ifdef HAVE_CLAMPI
         gres =
             CMPI_Get(adj_v, r_off[1] - r_off[0], MPI_UINT32_T, dest_get,
-                     r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row);  //centrality[gvid]
+                     r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row, r_off[1] - r_off[0]);  //centrality[gvid]
         if (gres != CL_HIT) {
-          row_miss++;ls
+          row_miss++;
           
           CMPI_Win_flush(dest_get, win_row);
         }
@@ -1404,7 +1408,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
             }
             // read "position" of the adjacency 
 #ifdef HAVE_CLAMPI
-            gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col);
+            gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col, 0);
             if (gres != CL_HIT) {
               col_miss++;
               CMPI_Win_flush(dest_get, win_col);
@@ -1418,7 +1422,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 #ifdef HAVE_CLAMPI
             gres =
                 CMPI_Get(adj_v, r_off[1] - r_off[0], MPI_UINT32_T, dest_get,
-                         r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row);  //centrality[gvid]
+                         r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row, r_off[1] - r_off[0]);  //centrality[gvid]
 #else
             MMPI_GET(adj_v, r_off[1] - r_off[0], MPI_UINT32_T, dest_get,
                      r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row);
@@ -1534,6 +1538,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 }
 #endif  //END HAVE_SIMD
 
+#ifndef HAVE_SIMD
 void lcc_func(LOCINT *col, LOCINT *row, float *output) {
   LOCINT i = 0;
   if (R == 1) {
@@ -1690,7 +1695,7 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output) {
     freeMem(adj_local);
   }
 }
-
+#endif
 LOCINT uniform_int(LOCINT max, LOCINT min) {
   LOCINT temp = lrand48() % (max - min + 1) + min;
   MPI_Bcast(&temp, 1, MPI_INT, myid, MPI_COMM_CLUSTER);

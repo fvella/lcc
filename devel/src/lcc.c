@@ -70,7 +70,7 @@ int mono = 1;
 int undirected = 1;
 int analyze_degree = 0;
 
-LOCINT nglobal_ed;
+uint64_t nglobal_ed;
 int scale = 0;
 int edgef = 0;
 int ned = 0;
@@ -1194,12 +1194,12 @@ LOCINT bin_search(LOCINT *arr, int l, int r, LOCINT x){
         return 0;
 }
 
-void set_clampi_params(LOCINT ht_size, LOCINT mem_size) {
+void set_clampi_params(uint64_t ht_size, uint64_t mem_size) {
   char *mem_str = (char*) malloc(24);
   char *ht_str = (char*) malloc(24);
 
-  sprintf(mem_str, "%d", ht_size);
-  sprintf(ht_str, "%d", mem_size);
+  sprintf(mem_str, "%" PRIu64, ht_size);
+  sprintf(ht_str, "%" PRIu64, mem_size);
   setenv("CL_MEM_SIZE", mem_str, 1);
   setenv("CL_HT_ENTRIES", ht_str, 1);
   free(mem_str);
@@ -1268,12 +1268,17 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 
 #ifdef HAVE_CLAMPI
   // configure clampi as in thesis
-  double mem_factor = 0.25;
-  double non_local_portion = (nglobal_ed - ned) / (double)nglobal_ed;
-  LOCINT row_mem_size = mem_factor * nglobal_ed * sizeof(LOCINT);
-  double memory_portion = mem_factor / non_local_portion;
-  LOCINT row_ht_entries = N * pow(memory_portion, 2);
-  LOCINT index_size = N * 8 * 0.4;
+  uint64_t cache_size = 8589934592;
+  // uint64_t cache_size = 1073741824;
+  // cache_size = MIN(cache_size, nglobal_ed * 8 * 8);
+  // uint32_t cache_size = 2148483647;
+  printf("CACHE SIZE= %"PRIu64" \n", cache_size);
+  uint64_t index_size = N * 8 * 0.4;
+  uint64_t row_mem_size = cache_size - index_size;
+  uint64_t non_local_size = (nglobal_ed - ned) * 8;
+  double mem_factor = MIN(1, row_mem_size / non_local_size);
+  uint64_t row_ht_entries = N * pow(mem_factor, 2);
+  printf("row entry= %"PRIu64" \n", row_ht_entries);
 
   set_clampi_params(index_size, index_size / 2);
   CMPI_Win_create(col, col_bl * sizeof(LOCINT), sizeof(LOCINT), MPI_INFO_NULL,
@@ -2086,7 +2091,7 @@ int main(int argc, char *argv[]) {
 
   // relabel_graph(edge, ned);
   // get total number of remaining edges
-  MPI_Allreduce(&ned, &nglobal_ed, 1, LOCINT_MPI, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&ned, &nglobal_ed, 1, MPI_UINT64_T, MPI_SUM, MPI_COMM_WORLD);
   // check whether uint64 edges can fit in 32bit CSC
   if (4 == sizeof(LOCINT)) {
     if (!verify_32bit_fit(edge, ned))

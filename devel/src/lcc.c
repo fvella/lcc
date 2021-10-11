@@ -1268,7 +1268,8 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 
 #ifdef HAVE_CLAMPI
   // configure clampi as in thesis
-  uint64_t cache_size = 8589934592;
+  // uint64_t cache_size = 8589934592;
+  uint64_t cache_size = 32 * 1024 * 1024;
   printf("Cache size= %"PRIu64" \n", cache_size);
   uint64_t index_size = N * 8 * 0.4;
   uint64_t row_mem_size = cache_size - index_size;
@@ -1438,7 +1439,6 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
           }
           r_offset = r_off[1] - r_off[0];
         }
-        if(0) {
         //  Compute LCC
         if (len_keys < 64) {
           for (vv = 0; vv < len_keys; vv++) {
@@ -1473,7 +1473,6 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
               reduction[tid] = local_counter;
             }
           }
-        }
         }
         // flush remote read of next neighbour
         if (dest_get != myid && jj < row_offset - 1) {

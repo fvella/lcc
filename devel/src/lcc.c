@@ -22,8 +22,8 @@
 
 #include <sched.h>
 
-#define RUNS 3
-#define WARMUP 1
+#define RUNS 1
+#define WARMUP 0
 #include "mpi_wrapper.h"
 
 #ifdef HAVE_LIBLSB
@@ -1269,16 +1269,12 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 #ifdef HAVE_CLAMPI
   // configure clampi as in thesis
   uint64_t cache_size = 8589934592;
-  // uint64_t cache_size = 1073741824;
-  // cache_size = MIN(cache_size, nglobal_ed * 8 * 8);
-  // uint32_t cache_size = 2148483647;
-  printf("CACHE SIZE= %"PRIu64" \n", cache_size);
+  printf("Cache size= %"PRIu64" \n", cache_size);
   uint64_t index_size = N * 8 * 0.4;
   uint64_t row_mem_size = cache_size - index_size;
   uint64_t non_local_size = (nglobal_ed - ned) * 8;
-  double mem_factor = MIN(1, row_mem_size / non_local_size);
+  double mem_factor = MIN(1, row_mem_size / (double) non_local_size);
   uint64_t row_ht_entries = N * pow(mem_factor, 2);
-  printf("row entry= %"PRIu64" \n", row_ht_entries);
 
   set_clampi_params(index_size, index_size / 2);
   CMPI_Win_create(col, col_bl * sizeof(LOCINT), sizeof(LOCINT), MPI_INFO_NULL,
@@ -1442,7 +1438,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
           }
           r_offset = r_off[1] - r_off[0];
         }
-
+        if(0) {
         //  Compute LCC
         if (len_keys < 64) {
           for (vv = 0; vv < len_keys; vv++) {
@@ -1478,7 +1474,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
             }
           }
         }
-
+        }
         // flush remote read of next neighbour
         if (dest_get != myid && jj < row_offset - 1) {
 #ifdef HAVE_CLAMPI

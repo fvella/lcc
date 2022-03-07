@@ -66,7 +66,6 @@ int myid;
 int gntask;
 int ntask;
 static int nthreads = 1;
-int mono = 1;
 int undirected = 1;
 int analyze_degree = 0;
 
@@ -82,7 +81,7 @@ int mycol;
 int pmesh[MAX_PROC_I][MAX_PROC_J];
 MPI_Comm MPI_COMM_CLUSTER;
 
-LOCINT flag = 0;
+short debug = 0;
 
 LOCINT *reach = NULL;
 FILE *outdebug = NULL;
@@ -91,7 +90,6 @@ STATDATA *mystats = NULL;
 unsigned int outId;
 char strmesh[10];
 char cmdLine[256];
-static size_t tot_dev_mem = 0;
 
 MPI_Comm Row_comm, Col_comm;
 
@@ -155,12 +153,14 @@ ptr -= entry_made;
 return(str);
 }
 
-// root node, degree, nvisited, num_lvl
 
 /*
  * Print statistics
  */
 void prstat(uint64_t val, const char *msg, int det) {
+
+  if(debug == 0)
+    return;
 
   int myid, ntask, i, j, w1, w2, min, max;
   uint64_t t, *v = NULL;
@@ -239,18 +239,6 @@ static FILE *Fopen(const char *path, const char *mode) {
     exit(EXIT_FAILURE);
   }
   return fp;
-}
-static off_t get_fsize(const char *fpath) {
-
-  struct stat st;
-  int rv;
-
-  rv = stat(fpath, &st);
-  if (rv) {
-    fprintf(stderr, "Cannot stat file %s...\n", fpath);
-    exit(EXIT_FAILURE);
-  }
-  return st.st_size;
 }
 
 static uint64_t getFsize(FILE *fp) {
@@ -379,18 +367,6 @@ static uint64_t read_graph(int myid, int ntask, const char *fpath,
       n += 2;
     }
   }
-  // Check the number of edges against the number of lines, if there were
-  // comments
-  // nedges += comment_counter;
-  /*
-  if ((comment_counter > 0) && (lcounter != nedges)) {
-      fprintf(stderr, "Error reading the input file %s: the number of lines
-  differ from the number of edges in the header\n", fpath);
-      fprintf(stderr, "lcounter = %"PRIu64" nedges = %"PRIu64"\n", lcounter,
-  nedges);
-      exit(EXIT_FAILURE);
-  }
-   */
   fclose(fp);
 
   n /= 2; // number of ints -> number of edges
@@ -418,18 +394,6 @@ static uint64_t gen_graph(int scale, int edgef, uint64_t **ed) {
   return ned;
 }
 
-static void dump_edges(uint64_t *ed, uint64_t nedge, const char *desc) {
-
-  uint64_t i;
-  fprintf(outdebug, "%s - %ld\n", desc, nedge);
-
-  for (i = 0; i < nedge; i++)
-    fprintf(outdebug, "%" PRIu64 "\t%" PRIu64 "\n", ed[2 * i], ed[2 * i + 1]);
-
-  fprintf(outdebug, "\n");
-  return;
-}
-
 static int cmpedge_1d(const void *p1, const void *p2) {
   uint64_t *l1 = (uint64_t *)p1;
   uint64_t *l2 = (uint64_t *)p2;
@@ -443,34 +407,19 @@ static int cmpedge_1d(const void *p1, const void *p2) {
     return 1;
   return 0;
 }
-static void dump_rmat(uint64_t *myedges, uint64_t myned, int scale, int edgef) {
 
-  FILE *fout = NULL;
-  char fname[256];
+static void dump_edges(uint64_t *ed, uint64_t nedge, const char *path) {
 
   uint64_t i;
-  uint64_t max = 0;
-
-  qsort(myedges, myned, sizeof(uint64_t[2]), cmpedge_1d);
-  snprintf(fname, 256, "rmat_S%d_EF%d.txt", scale, edgef);
-  fprintf(stdout, "DUMP THE GENERATED RMAT FILE IN %s\n", fname);
-  fout = fopen(fname, "w+");
-  if (fout == NULL) {
-    fprintf(stderr, "in function %s: error opening %s\n", __func__, fname);
-    exit(EXIT_FAILURE);
-  }
-  max = N;
+  qsort(ed, nedge, sizeof(uint64_t[2]), cmpedge_1d);
+  FILE *fout = Fopen(path, "w+");
   fflush(stdout);
-  // fprintf(fout, "# Directed RMAT Scale=%d Edgefactor=%d\n", scale, edgef);
-  // fprintf(fout, "#\n");
-  // fprintf(fout, "# Nodes: %"PRIu64" Edges: %"PRIu64"\n", max, myned);
-  // fprintf(fout, "# NodeId\tNodeId\n");
-  for (i = 0; i < myned; i++) {
-    fprintf(fout, "%" PRIu64 "\t%" PRIu64 "\n", myedges[2 * i],
-            myedges[2 * i + 1]);
-  }
-  fclose(fout);
-  exit(EXIT_FAILURE);
+
+  for (i = 0; i < nedge; i++)
+    fprintf(fout, "%" PRIu64 "\t%" PRIu64 "\n", ed[2 * i], ed[2 * i + 1]);
+
+  fprintf(fout, "\n");
+  return;
 }
 
 /*
@@ -732,10 +681,6 @@ static LOCINT degree_reduction(int myid, int ntask, uint64_t **ed,
  *
  */
 static void print_degrees(FILE *outf, LOCINT ned, LOCINT *ed, LOCINT *in_degree, LOCINT *out_degree) {
-  // LOCINT in_degree = Malloc(N * sizeof(LOCINT));
-  // LOCINT out_degree = Malloc(N * sizeof(LOCINT));
-
-  int offs = myid * col_bl;
 
   for (int i = 0; i < ned; i++) {
     in_degree[ed[2 * i]]++;
@@ -752,30 +697,6 @@ static void print_degrees(FILE *outf, LOCINT ned, LOCINT *ed, LOCINT *in_degree,
       }
     }
   }
-}
-
-// In case input is degree ordered
-static uint64_t relabel_graph(uint64_t *ed, uint64_t ned) {
-  uint64_t l, n;
-  int re;
-  LOCINT *reorder = (LOCINT *)Malloc(col_bl * sizeof(LOCINT));
-  for (re = 0; re < col_bl; re++)
-    reorder[re] = re;
-
-  for (re = col_bl - 1; re >= 0; --re) {
-    int rnd = rand() % (re + 1);
-    LOCINT tmp = reorder[re];
-    reorder[re] = reorder[rnd];
-    reorder[rnd] = tmp;
-  }
-
-  for (n = l = 0; n < ned; n++) {
-    ed[2 * n] = reorder[ed[2 * n]];
-    ed[2 * n + 1] = reorder[ed[2 * n + 1]];
-  }
-  dump_rmat(ed, ned, 0, 0);
-  exit(EXIT_FAILURE);
-  return 0;
 }
 
 void init_rand(int mode) {
@@ -845,18 +766,6 @@ static int verify_32bit_fit(uint64_t *ed, uint64_t ned) {
   return 1;
 }
 
-static void init_lcc_1degree(uint64_t *edrem, uint64_t nedrem, uint64_t nverts,
-                             LOCINT *reach) {
-  uint64_t i;
-  LOCINT ur = 0;
-  for (i = 0; i < nedrem; i++) {
-    // Edrem are edges (u,v) where v is a 1-degree vertex removed
-    ur = GI2LOCI(edrem[2 * i]); // this is local row
-    // We need to use the number of vertices in the connected component
-    reach[ur]++;
-  }
-}
-
 /*
  * Build compressed sparse row
  *
@@ -901,117 +810,6 @@ static int cmpuloc(const void *p1, const void *p2) {
   if (l1 > l2)
     return 1;
   return 0;
-}
-
-/*
- *
- *
- */
-uint64_t compact(uint64_t *v, uint64_t ld, int *vnum, int n) {
-
-  int i, j;
-  uint64_t cnt = vnum[0];
-  for (i = 1; i < n; i++)
-    for (j = 0; j < vnum[i]; j++)
-      v[cnt++] = v[i * ld + j];
-  return cnt;
-}
-
-static inline void exchange_vert4x2(LOCINT *frt, LOCINT *frt_sig, int nfrt,
-                                    LOCINT *rbuf, LOCINT ld, int *rnum,
-                                    MPI_Request *request, MPI_Status *status,
-                                    int post) {
-  int i, p;
-  ld = ld * 2;
-
-  // Receive vertices from the processors in the same column except myself
-  // There are R processors in the same column
-  // Here I receive the frontiers from all other processors in the same column
-  for (i = 1; i < R; i++) {
-    p = (myrow + i) % R;
-    MPI_Irecv(rbuf + p * ld, ld, LOCINT_MPI, pmesh[p][mycol],
-              VTAG(pmesh[p][mycol]), MPI_COMM_CLUSTER, request + i - 1);
-  }
-  // Copy in the receiving buffer my frontier
-  memcpy(rbuf + myrow * ld, frt, nfrt * sizeof(*frt));
-  // Copy in the receiving buffer sigma values right after the frontier
-  memcpy(rbuf + myrow * ld + nfrt, frt_sig, nfrt * sizeof(*frt_sig));
-  // Store in rnum number of vertices in the new frontier found on this
-  // processor
-  rnum[myrow] = nfrt;
-  // Send the frontier to all processors in the same Column.
-  // Here we send all vertices in the froniter to all processors on the column
-  for (i = 1; i < R; i++) {
-    p = (myrow + i) % R;
-    MPI_Send(rbuf + myrow * ld, 2 * nfrt, LOCINT_MPI, pmesh[p][mycol],
-             VTAG(myid), MPI_COMM_CLUSTER);
-  }
-  // Wait for IRecv to complete
-  MPI_Waitall(R - 1, request, status);
-  for (i = 1; i < R; i++) {
-    // Get how many vertices have been received from each processor and store
-    // the value in rnum[]
-    p = (myrow + i) % R;
-    MPI_Get_count(status + i - 1, LOCINT_MPI, rnum + p);
-    // Receive both vertices and their sigma value
-    if (rnum[p] > 0)
-      rnum[p] =
-          rnum[p] / 2; // In this way rnum contains the number of couples V,S
-  }
-  return;
-}
-
-static inline void exchange_horiz4x2(LOCINT *sbuf, LOCINT sld, int *snum,
-                                     LOCINT *rbuf, LOCINT rld, int *rnum,
-                                     MPI_Request *request, MPI_Status *status,
-                                     int post) {
-  int i, p;
-
-  rld = rld * 2;
-  sld = sld * 2;
-
-  // Post the IRecv for all processes in the same row
-  for (i = 1; i < C; i++) {
-    p = (mycol + i) % C;
-    MPI_Irecv(rbuf + p * rld, rld, LOCINT_MPI, pmesh[myrow][p],
-              HTAG(pmesh[myrow][p]), MPI_COMM_CLUSTER, request + i - 1);
-  }
-
-  rnum[mycol] = 0;
-
-  for (i = 1; i < C; i++) {
-    // Send data to other processes
-    p = (mycol + i) % C;
-    MPI_Send(sbuf + p * sld, snum[p] * 2, LOCINT_MPI, pmesh[myrow][p],
-             HTAG(myid), MPI_COMM_CLUSTER);
-  }
-  MPI_Waitall(C - 1, request, status);
-  for (i = 1; i < C; i++) {
-    // Get the real number of data sent
-    MPI_Get_count(status + i - 1, LOCINT_MPI, rnum + (mycol + i) % C);
-    if (rnum[(mycol + i) % C] > 0)
-      rnum[(mycol + i) % C] = rnum[(mycol + i) % C] / 2;
-  }
-
-  return;
-}
-
-static void dump_deg(LOCINT *deg, LOCINT *deg_count, int n) {
-
-  FILE *fp = NULL;
-  char name[MAX_LINE];
-  int myid;
-  int i;
-  MPI_Comm_rank(MPI_COMM_CLUSTER, &myid);
-  snprintf(name, MAX_LINE, "degree_%d", myid);
-  fp = Fopen(name, "a");
-
-  for (i = 0; i < n; i++)
-    fprintf(fp, " %d (%d),", deg[i], deg_count[i]);
-
-  fprintf(fp, "\n");
-  fclose(fp);
-  return;
 }
 
 static void dump_array(const char *name, LOCINT *arr, int n) {
@@ -1169,17 +967,26 @@ static void print_stats(double *teps, int n) {
 void usage(const char *pname) {
   prexit(
       "Usage:\n"
-      "\t %1$s -p RxC [-d dev0,dev1,...] [-o outfile] [-D] [-d] [-m] [-N <# "
-      "of searches>]\n"
-      "\t -> to visit a graph read from file:\n"
-      "\t\t -f <graph file> -n <# vertices>\n"
-      "\t\t -S <scale> [-E <edge factor>]\n"
-      "\t Where:\n"
-      "\t\t -D to ENABLE debug information\n"
-      "\t\t -U DO NOT make graph Undirected\n"
-      "\t\t -a perform degree analysis\n"
-      "\n",
-      pname);
+      "-p RxC"
+      "\t Specify #rows and #columns in processor mesh. (Currently only 1D (e.g. R=1) implemented!)\n"
+      "* To process a graph read from file:\n"
+      "-f <graph file> -n <# vertices>\n"
+      "* To generate a graph using R-MAT\n"
+      "-S <scale> -E <edge factor>\n"
+      "* Generic options:\n"
+      "-H"
+      "\t Use one-degree reduction\n"
+      "-o <path to output file>"
+      "\t Output LCC scores to file\n"
+      "-d <path to dump graph>"
+      "\t Dump the graph to file\n"
+      "-D"
+      "\tPrint debug messages\n"
+      "-U"
+      "\tDO NOT make graph Undirected (use if graph is directed!)\n"
+      "-a"
+      "\tperform degree analysis\n"
+      );
   return;
 }
 
@@ -1206,8 +1013,9 @@ void set_clampi_params(uint64_t ht_size, uint64_t mem_size) {
   free(ht_str);
 }
 
+// user-defined eviction score
 double own_score(double penalty, double lasthit, double val) {
-  return penalty * val;
+  return val;
 }
 
 #ifdef HAVE_SIMD
@@ -1216,7 +1024,6 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
   int dest_get;
   LOCINT jj = 0;
   LOCINT vv = 0;
-  LOCINT vvv = 0;
   LOCINT counter = 0;
   LOCINT gvid = 0;
   LOCINT r_off[2] = {0, 0};
@@ -1243,7 +1050,6 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
   LOCINT *adj_v;
   LOCINT *adj_local;
 
-  LOCINT ac = 0;
 #ifdef HAVE_CLAMPI
   CMPI_Win win_col;
   CMPI_Win win_row;
@@ -1267,10 +1073,8 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 #endif
 
 #ifdef HAVE_CLAMPI
-  // configure clampi as in thesis
+  // configure clampi cache size
   uint64_t cache_size = 8589934592;
-  // uint64_t cache_size = 32 * 1024 * 1024;
-  printf("Cache size= %"PRIu64" \n", cache_size);
   uint64_t index_size = N * 8 * 0.4;
   uint64_t row_mem_size = cache_size - index_size;
   uint64_t non_local_size = (nglobal_ed - ned) * 8;
@@ -1279,11 +1083,11 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 
   set_clampi_params(index_size, index_size / 2);
   CMPI_Win_create(col, col_bl * sizeof(LOCINT), sizeof(LOCINT), MPI_INFO_NULL,
-                  Row_comm, &win_col, NULL);
+                  Row_comm, &win_col);
 
   set_clampi_params(row_mem_size, row_ht_entries);
   CMPI_Win_create(row, col[col_bl] * sizeof(LOCINT), sizeof(LOCINT),
-                  MPI_INFO_NULL, Row_comm, &win_row, &own_score);
+                  MPI_INFO_NULL, Row_comm, &win_row);
 
   MMPI_WIN_LOCK_ALL(0, win_col.win);
   MMPI_WIN_LOCK_ALL(0, win_row.win);
@@ -1317,7 +1121,6 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 
     LOCINT nget = 0;
     LOCINT nlocal = 0;
-    LOCINT zerouno = 0;
 #ifdef HAVE_LIBLSB
     LSB_Res();
 #endif
@@ -1345,7 +1148,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
       // adjacency of the first neighbour
       if (dest_get != myid) {
 #ifdef HAVE_CLAMPI
-        gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col, 0);
+        gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col);
         if (gres != CL_HIT) {
           col_miss++;
           CMPI_Win_flush(dest_get, win_col);
@@ -1357,10 +1160,9 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 #ifdef HAVE_CLAMPI
         gres =
             CMPI_Get(adj_v, r_off[1] - r_off[0], MPI_UINT32_T, dest_get,
-                     r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row, r_off[1] - r_off[0]);  //centrality[gvid]
+                     r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row);  //user-defined score: r_off[1] - r_off[0]
         if (gres != CL_HIT) {
           row_miss++;
-          
           CMPI_Win_flush(dest_get, win_row);
         }
 #else
@@ -1410,7 +1212,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
             }
             // read "position" of the adjacency 
 #ifdef HAVE_CLAMPI
-            gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col, 0);
+            gres = CMPI_Get(r_off, 2, MPI_UINT32_T, dest_get, off_start, 2, MPI_UINT32_T, win_col);
             if (gres != CL_HIT) {
               col_miss++;
               CMPI_Win_flush(dest_get, win_col);
@@ -1424,7 +1226,7 @@ void lcc_func_bin_simd(LOCINT *col, LOCINT *row, float *output) {
 #ifdef HAVE_CLAMPI
             gres =
                 CMPI_Get(adj_v, r_off[1] - r_off[0], MPI_UINT32_T, dest_get,
-                         r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row, r_off[1] - r_off[0]);  //centrality[gvid]
+                         r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row);  // user-defined score: r_off[1] - r_off[0]
 #else
             MMPI_GET(adj_v, r_off[1] - r_off[0], MPI_UINT32_T, dest_get,
                      r_off[0], r_off[1] - r_off[0], MPI_UINT32_T, win_row);
@@ -1577,7 +1379,6 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output) {
 
     LOCINT nget = 0;
     LOCINT nlocal = 0;
-    LOCINT zerouno = 0;
 #ifdef HAVE_LIBLSB
     LSB_Set_Rparam_int("rank", gmyid);
     LSB_Set_Rparam_int("csize", gntask);
@@ -1652,7 +1453,6 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output) {
         }
         if (row_offset == 1 || row_offset == 0) {
           lcc = 0;
-          zerouno++;
         } else {
           lcc = (float)counter / (float)(row_offset * (row_offset - 1));
         }
@@ -1696,30 +1496,13 @@ void lcc_func(LOCINT *col, LOCINT *row, float *output) {
   }
 }
 #endif
-LOCINT uniform_int(LOCINT max, LOCINT min) {
-  LOCINT temp = lrand48() % (max - min + 1) + min;
-  MPI_Bcast(&temp, 1, MPI_INT, myid, MPI_COMM_CLUSTER);
-  return temp;
-}
-
-double uniform_double(double max, double min) {
-  double temp = (double)rand() / RAND_MAX;
-  temp = min + temp * (max - min + 1);
-  return temp;
-}
-
-double uniform01() {
-  double temp = (double)lrand48() / (double)RAND_MAX;
-  MPI_Bcast(&temp, 1, MPI_DOUBLE, myid, MPI_COMM_CLUSTER);
-  return temp;
-}
 
 int main(int argc, char *argv[]) {
 
   int s, t, gread = -1;
   scale = 20;
   edgef = 16;
-  short dump = 0, debug = 0;
+  short dump = 0;
   int64_t i, j;
   uint64_t nbfs = 1;
   LOCINT n, l, rem_ed = 0;
@@ -1733,26 +1516,13 @@ int main(int argc, char *argv[]) {
 
   LOCINT *degree = NULL; // Degree for all vertices in the same column
 
-  float *hRFbuf = NULL;
-  float *hSFbuf = NULL;
   LOCINT *deg = NULL;
 
-  LOCINT *vRbuf = NULL;
-  int *vRnum = NULL; /* type int (MPI_Send()/Recv() assumes int counts) */
-
-  LOCINT *hSbuf = NULL;
-  LOCINT *hRbuf = NULL;
-  int *hSnum = NULL;
-  int *hRnum = NULL;
-  MPI_Status *status;
-  MPI_Request *vrequest;
-  MPI_Request *hrequest;
   MPI_Comm MPI_COMM_COL;
 
-  int rootset = 0;
 
   int cntask;
-  char *gfile = NULL, *p = NULL, *ofile = NULL;
+  char *gfile = NULL, *p = NULL, *ofile = NULL, *dump_path = NULL;
   int c;
 
   int threadnum;
@@ -1763,12 +1533,6 @@ int main(int argc, char *argv[]) {
   cpu_set_t coremask;
 
   TIMER_DEF(0);
-
-  int random = 0;
-  /*Variables for approximating LCC/Triangle Counting*/
-  LOCINT approx_nverts =
-      1; // How many vertices to check the approximation score
-  LOCINT *approx_vertices = NULL;
 
   float *dist_lcc = NULL; // Local Cluster Coef... Store in scan mode
 
@@ -1810,7 +1574,7 @@ int main(int argc, char *argv[]) {
     fprintf(stdout, "%s\n", cmdLine);
   }
 
-  while ((c = getopt(argc, argv, "o:p:ahD:dUf:n:r:S:E:N:H:")) != EOF) {
+  while ((c = getopt(argc, argv, "o:p:ahDd:Uf:n:r:S:E:N:H:")) != EOF) {
 #define CHECKRTYPE(exitval, opt)                                               \
   {                                                                            \
     if (exitval == gread)                                                      \
@@ -1844,8 +1608,9 @@ int main(int argc, char *argv[]) {
         prexit("Invalid number of columns for proc mesh (-p): %s\n", p);
       break;
     case 'd':
-      // Dump RMAT Generated graph
+      // Dump graph after degree reduction
       dump = 1;
+      dump_path = strdup(optarg);
       break;
     case 'D':
       // DEBUG
@@ -1859,7 +1624,7 @@ int main(int argc, char *argv[]) {
       CHECKRTYPE(0, 'n')
       if (0 == sscanf(optarg, "%" PRIu64, &N))
         prexit("Invalid number of vertices (-n): %s\n", optarg);
-        scale = log2(N);
+      scale = log2(N);
       break;
     case 'S':
       CHECKRTYPE(1, 'S')
@@ -1871,10 +1636,6 @@ int main(int argc, char *argv[]) {
       CHECKRTYPE(1, 'E')
       if (0 == sscanf(optarg, "%d", &edgef))
         prexit("Invalid edge factor (-S): %s\n", optarg);
-      break;
-    case 'N':
-      if (0 == sscanf(optarg, "%ld", &nbfs))
-        prexit("Option not implemented (-N): %s\n", optarg);
       break;
     case 'U':
       // Undirected
@@ -1892,8 +1653,7 @@ int main(int argc, char *argv[]) {
     }
 #undef CHECKRTYPE
   }
-  if (approx_nverts > N)
-    prexit("Number of vertices required is lager than N\n");
+
   if (gread) {
     if (!gfile || !N)
       prexit("Graph file (-f) and number of vertices (-n)"
@@ -1943,23 +1703,16 @@ int main(int argc, char *argv[]) {
   col_bl = N / C;       /* adjacency matrix columns per block: N/C */
   row_pp = N / R;       /* adjacency matrix rows per proc:     N/(RC)*C = N/R */
 
-  if ((gmyid == 0) && (debug == 1)) {
-    char fname[MAX_LINE];
-    snprintf(fname, MAX_LINE, "%s_%d.log", "debug", gmyid);
-    outdebug = Fopen(fname, "w");
-  }
+  // if ((gmyid == 0) && (debug == 1)) {
+  //   char fname[MAX_LINE];
+  //   snprintf(fname, MAX_LINE, "%s_%d.log", "debug", gmyid);
+  //   outdebug = Fopen(fname, "w");
+  // }
 
   char *resname = NULL;
 
-  if (ntask > 1)
-    mono = 0;
-  // Disable random when a starting node is provided
-  if (rootset > 0)
-    random = 0;
-
   if (gmyid == 0) {
-    fprintf(stdout, "\n\n****** DEVEL VERSION "
-                    "******\n\n\n\n***************************\n\n");
+    fprintf(stdout, "\n\n****** DEVEL VERSION ******\n\n");
     fprintf(stdout, "Total number of vertices (N): %" PRIu64 "\n", N);
     fprintf(stdout, "Processor mesh rows (R): %d\n", R);
     fprintf(stdout, "Processor mesh columns (C): %d\n", C);
@@ -1968,7 +1721,6 @@ int main(int argc, char *argv[]) {
     } else {
       fprintf(stdout, "RMAT graph scale: %d\n", scale);
       fprintf(stdout, "RMAT graph edge factor: %d\n", edgef);
-      fprintf(stdout, "Number of bc rounds: %ld\n", nbfs);
     }
     fprintf(stdout, "\n\n");
     if (heuristic == 0) {
@@ -1978,7 +1730,7 @@ int main(int argc, char *argv[]) {
       fprintf(stdout, "HEURISTICs: 1-degree reduction ON: %d\n", heuristic);
     }
 
-    fprintf(stdout, "\n");
+    fprintf(stdout, "\n***************************\n\n");
   }
 
   if (NULL != ofile) {
@@ -1995,7 +1747,7 @@ int main(int argc, char *argv[]) {
       pmesh[i][j] = i * C + j;
 
   if (myid == 0)
-    fprintf(stdout, "%s graph...\n", gread ? "Reading" : "Generating");
+    fprintf(stdout, "%s graph...", gread ? "Reading" : "Generating");
   TIMER_START(0);
   if (gread)
     ned = read_graph(myid, ntask, gfile, &edge); // Read from file
@@ -2012,11 +1764,6 @@ int main(int argc, char *argv[]) {
     ned = l;
   }
 
-  if (dump > 0 && gread == 0 && ntask == 1) {
-    fprintf(stdout, "Dump file...\n");
-    dump_rmat(edge, ned, scale, edgef);
-  }
-
   // 1 DEGREE PREPROCESSING TIMING ON
   if (heuristic == 1) {
     if (gmyid == 0)
@@ -2027,6 +1774,15 @@ int main(int argc, char *argv[]) {
     TIMER_STOP(0);
     degree_reduction_time = TIMER_ELAPSED(0);
   }
+
+  if (dump > 0) {
+    if(1 < ntask) {
+      prexit("Exporting graph works only with a single task.");
+    }
+    fprintf(stdout, "Dump file to: /%s\n", dump_path);
+    dump_edges(edge, ned, dump_path);
+  }
+
   // 2-D PARTITIONING
   if (gmyid == 0)
     fprintf(stdout, "Partitioning graph... ");
@@ -2143,24 +1899,26 @@ lcc_func(col, row, dist_lcc);
 TIMER_STOP(0);
 
 #elif HAVE_SIMD
-#pragma omp parallel private(threadnum, coremask, clbuf)
-{
-		nthreads = omp_get_num_threads();
-    threadnum = omp_get_thread_num();
-    (void)sched_getaffinity(0, sizeof(coremask), &coremask);
-    cpuset_to_cstr(&coremask, clbuf);
-    #pragma omp barrier
-    fprintf(stdout, "Rank %d, using %d threads on %s: thread %d on core = %s.\n",
-     gmyid, nthreads, hnbuf, threadnum, clbuf);
-}
-if (myid == 0) fprintf(stdout, "Computing LCC [BIN_SIMD] using %d process on %d core per process\n", ntask, nthreads);
+  #pragma omp parallel private(threadnum, coremask, clbuf)
+  {
+      nthreads = omp_get_num_threads();
+      threadnum = omp_get_thread_num();
+      (void)sched_getaffinity(0, sizeof(coremask), &coremask);
+      cpuset_to_cstr(&coremask, clbuf);
+      #pragma omp barrier
+      if(debug == 1) {
+      fprintf(stdout, "Rank %d, using %d threads on %s: thread %d on core = %s.\n",
+      gmyid, nthreads, hnbuf, threadnum, clbuf);
+      }
+  }
+if (myid == 0) fprintf(stdout, "Computing LCC [BIN_SIMD] using %d process on %d core per process...", ntask, nthreads);
 TIMER_START(0);
 lcc_func_bin_simd(col, row, dist_lcc);
 TIMER_STOP(0);
 #endif
 
 
-if (myid == 0) fprintf(stdout, "LCC done in %f secs on %d rank\n",TIMER_ELAPSED(0)/1.0E+6, myid);
+if (myid == 0) fprintf(stdout, "done in %f secs on %d rank\n",TIMER_ELAPSED(0)/1.0E+6, myid);
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (gmyid == 0) {
@@ -2190,18 +1948,7 @@ if (myid == 0) fprintf(stdout, "LCC done in %f secs on %d rank\n",TIMER_ELAPSED(
   freeMem(gfile);
   freeMem(degree);
   freeMem(reach);
-  freeMem(vRbuf);
-  freeMem(vRnum);
-  freeMem(hSbuf);
-  freeMem(hSnum);
-  freeMem(hRbuf);
-  freeMem(hRnum);
-  freeMem(hSFbuf);
-  freeMem(hRFbuf);
-  // 2-degree
-
-  // ONEPREFIX
-
+  
   MPI_Barrier(MPI_COMM_WORLD);
   MPI_Barrier(Row_comm);
   MPI_Barrier(Col_comm);

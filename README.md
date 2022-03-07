@@ -2,7 +2,7 @@
 
 Serial, parallel and distributed code for the computation of the local clustering coefficient on large scale graphs.
 
-Code base for the *Asynchronous Distributed-Memory Triangle Counting and LCC with RMA Caching [[1]](https://arxiv.org/abs/2202.13976!)* paper.
+Code base for the *Asynchronous Distributed-Memory Triangle Counting and LCC with RMA Caching [[1]](https://arxiv.org/abs/2202.13976)* paper.
 To reconstruct the results reported in the paper:
 - compile with ```--with-simd --with-clampi``` options
 - this version is compatible with the standard CLaMPI library ([git](https://github.com/spcl/CLaMPI)) and thus does not support user-specified eviction scores
